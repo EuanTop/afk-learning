@@ -664,7 +664,7 @@ export function StoryHomePage() {
 
   const bubbleStyle: React.CSSProperties = {
     left: `clamp(1rem, calc(${bubbleAnchor.x}px - 9rem), calc(100vw - min(72vw, 22rem) - 1rem))`,
-    top: `clamp(5.5rem, calc(${bubbleAnchor.y}px - 14rem), calc(100dvh - 16rem))`,
+    top: `clamp(5.5rem, calc(${bubbleAnchor.y}px - 18rem), calc(100dvh - 16rem))`,
   };
 
   const letterStyle: React.CSSProperties = {

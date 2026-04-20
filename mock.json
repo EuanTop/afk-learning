@@ -1,0 +1,561 @@
+{
+  "learnerProfile": {
+    "name": "小明",
+    "age": 8,
+    "englishLevel": "beginner-reader",
+    "interests": ["恐龙", "太空", "动物"]
+  },
+  "week": [
+    {
+      "date": "2026-04-13",
+      "weekday": "Monday",
+      "environment": {
+        "weather": { "condition": "晴", "tempHigh": 22, "tempLow": 14 },
+        "event": null,
+        "parentNote": null
+      },
+      "eveningWish": null,
+      "chat": null,
+      "letterDelivery": {
+        "time": "2026-04-13T20:00:00+08:00",
+        "agentReasoning": {
+          "wishInfluence": "首次使用，无许愿历史",
+          "environmentInfluence": "晴天，适合轻松愉快的开场",
+          "topicChoice": "欢迎信 — 建立信任关系，介绍卡皮巴拉的身份和来信机制"
+        },
+        "letter": {
+          "greeting": "Dear 小明，",
+          "body": [
+            "你好呀！我是卡皮巴拉，一只喜欢到处 **travel** 的水豚。",
+            "每天晚上，我都会出发去一个新的地方冒险。然后把我看到的、听到的，写成一封信寄给你。",
+            "我的信里会有一些 **English words**，不用担心看不懂——你可以点击它们，我会告诉你是什么意思。",
+            "今天是我们第一次见面，所以这封信很短。但是从明天开始，如果你告诉我你想知道什么，我就会朝那个方向出发！",
+            "比如你可以说「我想知道恐龙」或者「月亮上有什么」，什么都可以。",
+            "Ready? 明天见！"
+          ],
+          "signoff": "你的新朋友，卡皮巴拉",
+          "postscript": "P.S. 试试在下面告诉我，你最想让我去哪里冒险？"
+        },
+        "vocabularyCards": [
+          {
+            "word": "travel",
+            "pronunciation": "/ˈtræv.əl/",
+            "meaningZh": "旅行",
+            "partOfSpeech": "verb",
+            "example": "I'm a capybara who likes to travel.",
+            "exampleZh": "我是一只喜欢到处旅行的水豚。",
+            "tapHint": "卡皮巴拉最喜欢做的事！"
+          },
+          {
+            "word": "English words",
+            "pronunciation": "/ˈɪŋ.ɡlɪʃ wɜːdz/",
+            "meaningZh": "英文单词",
+            "partOfSpeech": "noun",
+            "example": "My letters will have some English words.",
+            "exampleZh": "我的信里会有一些英文单词。",
+            "tapHint": "每封信都会带几个新词给你认识"
+          }
+        ],
+        "research": null,
+        "scene": {
+          "background": "sunset-mailbox",
+          "actors": ["capybara-waving", "mailbox-open"],
+          "mood": "warm-welcome"
+        }
+      },
+      "reviewSession": null
+    },
+    {
+      "date": "2026-04-14",
+      "weekday": "Tuesday",
+      "environment": {
+        "weather": { "condition": "阴", "tempHigh": 18, "tempLow": 12 },
+        "event": null,
+        "parentNote": "今天学校春游去了动物园，看了长颈鹿和大象，很开心"
+      },
+      "eveningWish": {
+        "time": "2026-04-13T20:35:00+08:00",
+        "childText": "我想知道恐龙",
+        "capybaraReply": "恐龙！好的，我今晚就出发去远古时代看看……听说那里有比房子还大的家伙。明天晚上我把看到的都写信告诉你！"
+      },
+      "chat": [
+        { "speaker": "child", "text": "恐龙是不是很大", "time": "2026-04-13T20:36:00+08:00" },
+        { "speaker": "capybara", "text": "有的比你家楼房还高呢！明天信里告诉你具体有多大。现在早点睡，我要出发啦～", "time": "2026-04-13T20:36:30+08:00" }
+      ],
+      "letterDelivery": {
+        "time": "2026-04-14T20:00:00+08:00",
+        "agentReasoning": {
+          "wishInfluence": "用户想知道恐龙，但家长备注今天去了动物园",
+          "environmentInfluence": "春游动物园经历 → 从今天看到的动物出发，自然过渡到'远古的亲戚'",
+          "topicChoice": "动物园的朋友们有一些远古亲戚 — 结合当天经历引入恐龙话题，比直接讲恐龙更有代入感"
+        },
+        "letter": {
+          "greeting": "Dear 小明，",
+          "body": [
+            "听说你今天去动物园啦！是不是看到了好多 **animals**？",
+            "你知道吗，动物园里的那些大家伙——长颈鹿、大象——它们都有一些非常非常古老的 **relatives**。",
+            "我昨晚跑去了一个叫 Mesozoic Era（中生代）的地方。那里没有围栏，没有售票处，只有巨大的 **dinosaurs** 在走来走去！",
+            "有一种恐龙叫 Brachiosaurus，它的脖子比长颈鹿还要长三倍！It was as tall as a four-story building. 想象一下，它低头喝水的时候，脖子要弯好久好久。",
+            "还有一种小恐龙，只有 **chicken** 那么大，浑身长着羽毛。Scientists think birds evolved from dinosaurs. 所以你今天在动物园看到的鸟，说不定就是恐龙的后代呢！",
+            "明天我想继续在这个时代逛逛。你有什么特别想知道的吗？"
+          ],
+          "signoff": "从中生代寄出的，卡皮巴拉",
+          "postscript": "P.S. 下次去动物园的时候，看看鸟的脚——像不像小恐龙的爪子？"
+        },
+        "vocabularyCards": [
+          {
+            "word": "animals",
+            "pronunciation": "/ˈæn.ɪ.məlz/",
+            "meaningZh": "动物",
+            "partOfSpeech": "noun",
+            "example": "Did you see many animals at the zoo?",
+            "exampleZh": "你在动物园看到了好多动物吗？",
+            "tapHint": "你今天见到了哪些？"
+          },
+          {
+            "word": "relatives",
+            "pronunciation": "/ˈrel.ə.tɪvz/",
+            "meaningZh": "亲戚",
+            "partOfSpeech": "noun",
+            "example": "They all have some very old relatives.",
+            "exampleZh": "它们都有一些非常古老的亲戚。",
+            "tapHint": "恐龙就是鸟的远房亲戚！"
+          },
+          {
+            "word": "dinosaurs",
+            "pronunciation": "/ˈdaɪ.nə.sɔːrz/",
+            "meaningZh": "恐龙",
+            "partOfSpeech": "noun",
+            "example": "Huge dinosaurs were walking around!",
+            "exampleZh": "巨大的恐龙在走来走去！",
+            "tapHint": "你最想见到哪种恐龙？"
+          },
+          {
+            "word": "chicken",
+            "pronunciation": "/ˈtʃɪk.ɪn/",
+            "meaningZh": "鸡",
+            "partOfSpeech": "noun",
+            "example": "Some dinosaurs were only as big as a chicken.",
+            "exampleZh": "有些恐龙只有鸡那么大。",
+            "tapHint": "没想到吧，恐龙也有这么小的！"
+          }
+        ],
+        "research": {
+          "title": "鸟类与恐龙的演化关系",
+          "summary": "现代鸟类是兽脚亚目恐龙的直系后代。始祖鸟（Archaeopteryx）是最早被发现的过渡化石之一，生活在约1.5亿年前的侏罗纪晚期。",
+          "sourceUrl": "https://zh.wikipedia.org/wiki/鸟类起源",
+          "sourceLabel": "维基百科"
+        },
+        "scene": {
+          "background": "prehistoric-forest",
+          "actors": ["brachiosaurus-eating", "small-feathered-dino", "capybara-with-notebook"],
+          "mood": "wonder-discovery"
+        }
+      },
+      "reviewSession": null
+    },
+    {
+      "date": "2026-04-15",
+      "weekday": "Wednesday",
+      "environment": {
+        "weather": { "condition": "小雨", "tempHigh": 15, "tempLow": 10 },
+        "event": null,
+        "parentNote": null
+      },
+      "eveningWish": {
+        "time": "2026-04-14T20:42:00+08:00",
+        "childText": "恐龙为什么灭绝了",
+        "capybaraReply": "这个问题好大……我今晚得跑到6500万年前去看看。据说那天天上掉下来一颗很大很大的石头。我去找找看！"
+      },
+      "chat": null,
+      "letterDelivery": {
+        "time": "2026-04-15T20:00:00+08:00",
+        "agentReasoning": {
+          "wishInfluence": "直接回应'恐龙为什么灭绝'的问题",
+          "environmentInfluence": "今天下雨 → 信件开头用雨天氛围呼应灭绝那天的场景",
+          "topicChoice": "恐龙灭绝的真相 — 小行星撞击 + 气候变化，用故事化叙述而非百科式罗列"
+        },
+        "letter": {
+          "greeting": "Dear 小明，",
+          "body": [
+            "今天外面在下雨吧？我昨晚去的那个时代，也在下雨——不过那场雨，下了好几年。",
+            "6500万年前的某一天，一颗巨大的 **asteroid** 从天上掉了下来。它有一座山那么大，撞到了现在墨西哥的地方。",
+            "The impact was so powerful that dust covered the sky. 灰尘把整个天空都遮住了，太阳照不进来，plants couldn't grow, 植物长不出来，恐龙们找不到食物。",
+            "但是！不是所有生物都消失了。一些小小的 **mammals**——比老鼠还小的毛茸茸的家伙——躲在地洞里活了下来。",
+            "还记得昨天信里说的吗？那些长着羽毛的小恐龙，有一些也 **survived**。它们就是后来的鸟！",
+            "所以虽然大恐龙不在了，但它们的故事还在继续。Every bird you see is a living dinosaur story."
+          ],
+          "signoff": "从雨中寄出的，卡皮巴拉",
+          "postscript": "P.S. 下次下雨的时候，想想那些在地洞里等待的小动物们——它们后来变成了我们！"
+        },
+        "vocabularyCards": [
+          {
+            "word": "asteroid",
+            "pronunciation": "/ˈæs.tə.rɔɪd/",
+            "meaningZh": "小行星",
+            "partOfSpeech": "noun",
+            "example": "A huge asteroid fell from the sky.",
+            "exampleZh": "一颗巨大的小行星从天上掉了下来。",
+            "tapHint": "比一座山还大的太空石头！"
+          },
+          {
+            "word": "mammals",
+            "pronunciation": "/ˈmæm.əlz/",
+            "meaningZh": "哺乳动物",
+            "partOfSpeech": "noun",
+            "example": "Small mammals survived by hiding underground.",
+            "exampleZh": "小小的哺乳动物躲在地下活了下来。",
+            "tapHint": "我们人类也是哺乳动物哦"
+          },
+          {
+            "word": "survived",
+            "pronunciation": "/sərˈvaɪvd/",
+            "meaningZh": "存活下来",
+            "partOfSpeech": "verb",
+            "example": "Some feathered dinosaurs survived.",
+            "exampleZh": "一些长着羽毛的恐龙存活了下来。",
+            "tapHint": "活下来的都是了不起的！"
+          }
+        ],
+        "research": {
+          "title": "白垩纪-古近纪灭绝事件",
+          "summary": "约6600万年前，一颗直径约10公里的小行星撞击了今墨西哥尤卡坦半岛，形成了希克苏鲁伯陨石坑。撞击引发的全球性灾难导致约75%的物种灭绝，包括所有非鸟恐龙。",
+          "sourceUrl": "https://zh.wikipedia.org/wiki/白垩纪－古近纪灭绝事件",
+          "sourceLabel": "维基百科"
+        },
+        "scene": {
+          "background": "rainy-prehistoric-dusk",
+          "actors": ["asteroid-in-sky", "small-mammal-in-burrow", "capybara-with-umbrella"],
+          "mood": "dramatic-but-hopeful"
+        }
+      },
+      "reviewSession": {
+        "dueCards": ["word:travel", "word:animals"],
+        "results": [
+          { "cardId": "word:travel", "rating": "good" },
+          { "cardId": "word:animals", "rating": "easy" }
+        ]
+      }
+    },
+    {
+      "date": "2026-04-16",
+      "weekday": "Thursday",
+      "environment": {
+        "weather": { "condition": "晴", "tempHigh": 20, "tempLow": 13 },
+        "event": "清明节",
+        "parentNote": null
+      },
+      "eveningWish": {
+        "time": "2026-04-15T20:55:00+08:00",
+        "childText": "还想听恐龙的",
+        "capybaraReply": "嗯……恐龙的故事我们已经听了两天了。今天是清明节，我想带你去看看另一种'记住过去'的方式——化石。"
+      },
+      "chat": [
+        { "speaker": "child", "text": "化石是什么", "time": "2026-04-15T20:56:00+08:00" },
+        { "speaker": "capybara", "text": "就像你在沙滩上踩一个脚印，如果那个脚印变成了石头，过了一亿年还在——那就是化石！", "time": "2026-04-15T20:56:30+08:00" }
+      ],
+      "letterDelivery": {
+        "time": "2026-04-16T20:00:00+08:00",
+        "agentReasoning": {
+          "wishInfluence": "用户想继续听恐龙，但已连续两天恐龙主题，需引入新视角避免茧房",
+          "environmentInfluence": "清明节'记住过去'→ 自然过渡到化石（大自然记住过去的方式）",
+          "topicChoice": "化石：大自然的来信 — 既呼应恐龙兴趣，又引入地质学新视角"
+        },
+        "letter": {
+          "greeting": "Dear 小明，",
+          "body": [
+            "今天是清明节。人们会去看望已经不在的亲人，带上花，说说话，remember them.",
+            "大自然也有自己记住过去的方式——**fossils**。",
+            "化石就像是大自然写的信。A dinosaur stepped in mud millions of years ago, and that footprint turned to stone. 几百万年后，我们打开这封'信'，就能知道那只恐龙有多大、走得多快。",
+            "我昨晚去了一个 **museum** 的地下室。那里有一块完整的三角龙 **skull**，比你的书桌还大！",
+            "Scientists can read fossils like letters. 从骨头的形状，他们能猜出恐龙吃什么、跑多快、甚至生过什么病。",
+            "虽然恐龙不在了，但它们留下了很多'信'给我们读。就像清明节我们记住亲人一样，化石帮我们记住了地球的故事。"
+          ],
+          "signoff": "从博物馆地下室偷偷寄出的，卡皮巴拉",
+          "postscript": "P.S. 你有没有在路边捡到过奇怪的石头？说不定里面就藏着一封远古的信！"
+        },
+        "vocabularyCards": [
+          {
+            "word": "fossils",
+            "pronunciation": "/ˈfɒs.əlz/",
+            "meaningZh": "化石",
+            "partOfSpeech": "noun",
+            "example": "Fossils are like letters from nature.",
+            "exampleZh": "化石就像是大自然写的信。",
+            "tapHint": "几百万年前的'快递'！"
+          },
+          {
+            "word": "museum",
+            "pronunciation": "/mjuːˈziː.əm/",
+            "meaningZh": "博物馆",
+            "partOfSpeech": "noun",
+            "example": "I went to a museum's basement last night.",
+            "exampleZh": "我昨晚去了一个博物馆的地下室。",
+            "tapHint": "下次让爸妈带你去看看真的化石！"
+          },
+          {
+            "word": "skull",
+            "pronunciation": "/skʌl/",
+            "meaningZh": "头骨",
+            "partOfSpeech": "noun",
+            "example": "The triceratops skull was bigger than your desk!",
+            "exampleZh": "三角龙的头骨比你的书桌还大！",
+            "tapHint": "三角龙的头上有三只角"
+          }
+        ],
+        "research": {
+          "title": "化石",
+          "summary": "化石是保存在岩石中的古代生物遗体或遗迹。最常见的化石形成方式是矿化作用。",
+          "sourceUrl": "https://zh.wikipedia.org/wiki/化石",
+          "sourceLabel": "维基百科"
+        },
+        "scene": {
+          "background": "museum-basement-dim",
+          "actors": ["triceratops-skull", "capybara-with-magnifier", "fossil-footprint"],
+          "mood": "quiet-wonder"
+        }
+      },
+      "reviewSession": {
+        "dueCards": ["word:dinosaurs", "word:relatives"],
+        "results": [
+          { "cardId": "word:dinosaurs", "rating": "easy" },
+          { "cardId": "word:relatives", "rating": "good" }
+        ]
+      }
+    },
+    {
+      "date": "2026-04-17",
+      "weekday": "Friday",
+      "environment": {
+        "weather": { "condition": "多云", "tempHigh": 19, "tempLow": 12 },
+        "event": null,
+        "parentNote": null
+      },
+      "eveningWish": {
+        "time": "2026-04-16T21:02:00+08:00",
+        "childText": "想知道太空",
+        "capybaraReply": "太空！那我今晚得飞很远很远了……你知道吗，灭绝恐龙的那颗小行星就是从太空来的。我去看看它的老家！"
+      },
+      "chat": null,
+      "letterDelivery": {
+        "time": "2026-04-17T20:00:00+08:00",
+        "agentReasoning": {
+          "wishInfluence": "用户想知道太空",
+          "environmentInfluence": "无特殊 environment，但可以巧妙连接之前的恐龙→小行星→太空",
+          "topicChoice": "太空中的恐龙骨头？— 从小行星撞地球出发，引入太空知识，过渡自然"
+        },
+        "letter": {
+          "greeting": "Dear 小明，",
+          "body": [
+            "还记得我们说过的那颗 **asteroid** 吗？灭绝恐龙的那颗。它是从太空飞来的。",
+            "昨晚我飞到了太空里（别问我怎么飞的），想去看看那颗小行星的老家。",
+            "太空比你想象的要 **empty** 得多。大部分地方什么都没有，just darkness and silence. 但是偶尔，你会看到一颗 **planet** 在远处发光。",
+            "我路过了 Mars（火星）。It's red because the soil contains iron. 就像铁生锈了一样，整个星球都是红色的！",
+            "然后我到了 asteroid belt（小行星带）。那里有成千上万块大石头在太空里慢慢转。The asteroid that hit Earth came from somewhere like this.",
+            "你知道最神奇的是什么吗？Scientists found **water** on some asteroids. 水！太空里的石头上居然有水。有人说，地球上的水可能就是很久以前小行星带来的。",
+            "所以……灭绝恐龙的小行星是坏的，但更早以前的小行星，可能给地球带来了生命需要的水。Interesting, right?"
+          ],
+          "signoff": "从小行星带寄出的（信号有点弱），卡皮巴拉",
+          "postscript": "P.S. 今晚抬头看看天空，那些星星之间的黑暗里，藏着好多好多石头在飞。"
+        },
+        "vocabularyCards": [
+          {
+            "word": "empty",
+            "pronunciation": "/ˈemp.ti/",
+            "meaningZh": "空的",
+            "partOfSpeech": "adjective",
+            "example": "Space is much more empty than you think.",
+            "exampleZh": "太空比你想象的要空得多。",
+            "tapHint": "空到连声音都没有"
+          },
+          {
+            "word": "planet",
+            "pronunciation": "/ˈplæn.ɪt/",
+            "meaningZh": "行星",
+            "partOfSpeech": "noun",
+            "example": "You can see a planet glowing in the distance.",
+            "exampleZh": "你会看到一颗行星在远处发光。",
+            "tapHint": "地球也是一颗行星！"
+          },
+          {
+            "word": "water",
+            "pronunciation": "/ˈwɔː.tər/",
+            "meaningZh": "水",
+            "partOfSpeech": "noun",
+            "example": "Scientists found water on some asteroids.",
+            "exampleZh": "科学家在一些小行星上发现了水。",
+            "tapHint": "你喝的水可能来自太空！"
+          }
+        ],
+        "research": {
+          "title": "小行星带",
+          "summary": "小行星带位于火星和木星轨道之间，包含数百万颗大小不等的小行星。2010年代的探测任务在多颗小行星上发现了水冰和含水矿物。",
+          "sourceUrl": "https://zh.wikipedia.org/wiki/小行星带",
+          "sourceLabel": "维基百科"
+        },
+        "scene": {
+          "background": "asteroid-belt-starfield",
+          "actors": ["capybara-in-spacesuit", "mars-distant", "asteroids-floating"],
+          "mood": "vast-curious"
+        }
+      },
+      "reviewSession": {
+        "dueCards": ["word:asteroid", "word:mammals", "word:survived"],
+        "results": [
+          { "cardId": "word:asteroid", "rating": "good" },
+          { "cardId": "word:mammals", "rating": "hard" },
+          { "cardId": "word:survived", "rating": "good" }
+        ]
+      }
+    },
+    {
+      "date": "2026-04-18",
+      "weekday": "Saturday",
+      "environment": {
+        "weather": { "condition": "晴", "tempHigh": 23, "tempLow": 15 },
+        "event": null,
+        "parentNote": "周末带去了科技馆，看了火箭模型和太空展"
+      },
+      "eveningWish": {
+        "time": "2026-04-17T20:30:00+08:00",
+        "childText": "火箭怎么飞的",
+        "capybaraReply": "火箭！正好我昨晚在太空里看到了好多火箭飞过。今晚我去找一个火箭工厂看看！"
+      },
+      "chat": [
+        { "speaker": "child", "text": "我今天去科技馆了！", "time": "2026-04-18T19:45:00+08:00" },
+        { "speaker": "capybara", "text": "真的吗！那你一定看到火箭模型了吧？我的信马上就到——里面有你在科技馆没看到的秘密哦。", "time": "2026-04-18T19:45:30+08:00" }
+      ],
+      "letterDelivery": {
+        "time": "2026-04-18T20:00:00+08:00",
+        "agentReasoning": {
+          "wishInfluence": "用户想知道火箭怎么飞",
+          "environmentInfluence": "家长备注去了科技馆看火箭 → 结合实际体验",
+          "topicChoice": "火箭的秘密 — 结合科技馆经历，讲牛顿第三定律的故事化版本"
+        },
+        "letter": {
+          "greeting": "Dear 小明，",
+          "body": [
+            "听说你今天去科技馆了！是不是看到了很大很大的火箭模型？",
+            "你有没有想过，火箭那么重，怎么能飞起来？秘密就在一个词里：**push**。",
+            "你试过站在滑板上推墙吗？你推墙，墙也会推你——你就往后滑了。火箭也是一样！",
+            "火箭底部 **burns** 燃料，产生巨大的热气往下喷。The gas pushes down, and the rocket pushes up.",
+            "这个原理叫 Newton's Third Law. Every action has an equal and opposite **reaction**.",
+            "科技馆里的火箭模型是静止的，但真正发射时，the ground shakes and the sound is so loud you can feel it in your chest.",
+            "下次你吹气球然后松手，看它飞走——那就是一个小小的火箭。"
+          ],
+          "signoff": "从火箭发射台旁边寄出的（耳朵还在嗡嗡响），卡皮巴拉",
+          "postscript": "P.S. 试试吹一个气球，不要系口，松手看它飞——你就造了一个气球火箭！"
+        },
+        "vocabularyCards": [
+          {
+            "word": "push",
+            "pronunciation": "/pʊʃ/",
+            "meaningZh": "推",
+            "partOfSpeech": "verb",
+            "example": "The gas pushes down, and the rocket pushes up.",
+            "exampleZh": "气体往下推，火箭就往上飞。",
+            "tapHint": "推和被推，这就是火箭的秘密"
+          },
+          {
+            "word": "burns",
+            "pronunciation": "/bɜːnz/",
+            "meaningZh": "燃烧",
+            "partOfSpeech": "verb",
+            "example": "The rocket burns fuel at the bottom.",
+            "exampleZh": "火箭底部燃烧燃料。",
+            "tapHint": "火箭燃料烧起来比任何火都猛"
+          },
+          {
+            "word": "reaction",
+            "pronunciation": "/riˈæk.ʃən/",
+            "meaningZh": "反作用力",
+            "partOfSpeech": "noun",
+            "example": "Every action has an equal and opposite reaction.",
+            "exampleZh": "每一个力都有一个大小相等、方向相反的反作用力。",
+            "tapHint": "牛顿发现的！"
+          }
+        ],
+        "research": {
+          "title": "牛顿第三运动定律",
+          "summary": "牛顿第三定律指出：当一个物体对另一个物体施加力时，第二个物体同时对第一个物体施加大小相等、方向相反的力。",
+          "sourceUrl": "https://zh.wikipedia.org/wiki/牛顿第三运动定律",
+          "sourceLabel": "维基百科"
+        },
+        "scene": {
+          "background": "launch-pad-sunset",
+          "actors": ["rocket-with-flames", "capybara-covering-ears", "balloon-flying"],
+          "mood": "exciting-loud"
+        }
+      },
+      "reviewSession": {
+        "dueCards": ["word:fossils", "word:travel"],
+        "results": [
+          { "cardId": "word:fossils", "rating": "good" },
+          { "cardId": "word:travel", "rating": "easy" }
+        ]
+      }
+    },
+    {
+      "date": "2026-04-19",
+      "weekday": "Sunday",
+      "environment": {
+        "weather": { "condition": "晴", "tempHigh": 21, "tempLow": 13 },
+        "event": null,
+        "parentNote": null
+      },
+      "eveningWish": null,
+      "chat": [
+        { "speaker": "child", "text": "卡皮巴拉你今天去哪了", "time": "2026-04-19T19:30:00+08:00" },
+        { "speaker": "capybara", "text": "今天是周末，我没有出远门。我在整理这一周收集的东西呢——你这周学了好多新词！要不要一起回顾一下？", "time": "2026-04-19T19:30:30+08:00" },
+        { "speaker": "child", "text": "好", "time": "2026-04-19T19:31:00+08:00" },
+        { "speaker": "capybara", "text": "那我把这周的词卡都拿出来，你看看还记得多少。信里也有一个小小的回顾故事哦。", "time": "2026-04-19T19:31:30+08:00" }
+      ],
+      "letterDelivery": {
+        "time": "2026-04-19T20:00:00+08:00",
+        "agentReasoning": {
+          "wishInfluence": "无新愿望，只有闲聊",
+          "environmentInfluence": "周日，适合回顾和休息",
+          "topicChoice": "周末回顾信 — 串联本周所有主题，巩固词汇"
+        },
+        "letter": {
+          "greeting": "Dear 小明，",
+          "body": [
+            "这是我们认识的第一个星期！让我回忆一下这周我们一起去了哪些地方：",
+            "周二，我们从动物园出发，认识了恐龙这些远古的 **relatives**。",
+            "周三，我们看到了那颗巨大的 **asteroid** 如何改变了整个世界。那些小小的 **mammals** 活了下来。",
+            "周四是清明节，我们在 **museum** 里读大自然写的信——**fossils**。",
+            "周五我们飞到了太空，看到了 **empty** 的宇宙和漂浮的 **planet**。",
+            "周六你去了科技馆！我们一起学了火箭的秘密：**push** and **reaction**。",
+            "One whole week of adventures! 你最喜欢哪一天的故事？",
+            "下周我们可以去任何地方。海底？丛林？还是回到太空继续探索？Tell me what you want to know next."
+          ],
+          "signoff": "在家整理行李的，卡皮巴拉",
+          "postscript": "P.S. 这周你学了好多词呢。下面的词卡复习一下，看看还记得多少！"
+        },
+        "vocabularyCards": [],
+        "research": null,
+        "scene": {
+          "background": "capybara-home-cozy",
+          "actors": ["capybara-with-scrapbook", "postcards-on-wall", "word-cards-scattered"],
+          "mood": "warm-reflective"
+        }
+      },
+      "reviewSession": {
+        "dueCards": ["word:animals", "word:dinosaurs", "word:asteroid", "word:mammals", "word:fossils", "word:museum", "word:empty", "word:planet", "word:push", "word:burns", "word:reaction"],
+        "results": [
+          { "cardId": "word:animals", "rating": "easy" },
+          { "cardId": "word:dinosaurs", "rating": "easy" },
+          { "cardId": "word:asteroid", "rating": "good" },
+          { "cardId": "word:mammals", "rating": "good" },
+          { "cardId": "word:fossils", "rating": "good" },
+          { "cardId": "word:museum", "rating": "easy" },
+          { "cardId": "word:empty", "rating": "hard" },
+          { "cardId": "word:planet", "rating": "good" },
+          { "cardId": "word:push", "rating": "easy" },
+          { "cardId": "word:burns", "rating": "good" },
+          { "cardId": "word:reaction", "rating": "hard" }
+        ]
+      }
+    }
+  ]
+}
