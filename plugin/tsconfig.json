@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "paths": {
+      "@capybara-letter/shared": ["../shared/src/index.ts"]
+    }
+  },
+  "include": ["./*.ts", "./src/**/*.ts"],
+  "exclude": ["./**/*.test.ts", "./dist/**", "./node_modules/**"]
+}

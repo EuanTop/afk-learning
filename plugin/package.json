@@ -1,0 +1,50 @@
+{
+  "name": "@capybara-letter/plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Capybara's Letter — OpenClaw channel plugin",
+  "type": "module",
+  "peerDependencies": {
+    "openclaw": ">=2026.4.12"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@capybara-letter/shared": "workspace:*",
+    "ts-fsrs": "^5.3.2"
+  },
+  "devDependencies": {
+    "openclaw": ">=2026.4.12",
+    "typescript": "^6.0.2"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "setupEntry": "./setup-entry.ts",
+    "channel": {
+      "id": "edu-story",
+      "label": "Capybara's Letter",
+      "selectionLabel": "Capybara's Letter (Education)",
+      "detailLabel": "Capybara's Letter",
+      "docsPath": "/channels/edu-story",
+      "docsLabel": "edu-story",
+      "blurb": "Bilingual educational channel: children make wishes, Capybara delivers letters.",
+      "systemImage": "letter",
+      "order": 900,
+      "exposure": {
+        "configured": true,
+        "setup": true,
+        "docs": false
+      }
+    },
+    "install": {
+      "npmSpec": "@capybara-letter/plugin",
+      "defaultChoice": "npm",
+      "minHostVersion": ">=2026.4.12"
+    }
+  }
+}

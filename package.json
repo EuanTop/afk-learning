@@ -1,0 +1,17 @@
+{
+  "name": "capybara-letter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "卡皮巴拉的来信 — bilingual educational product powered by OpenClaw",
+  "type": "module",
+  "scripts": {
+    "dev:frontend": "pnpm --filter @capybara-letter/frontend dev",
+    "dev:globe": "pnpm --filter @capybara-letter/globe dev",
+    "build": "pnpm -r build",
+    "check": "pnpm -r --parallel run typecheck"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

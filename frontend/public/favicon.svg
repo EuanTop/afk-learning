@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Capybara's Letter favicon">
+  <rect width="128" height="128" rx="28" fill="#FFF4DA"/>
+  <rect x="10" y="10" width="108" height="108" rx="24" fill="#F3E0AE" stroke="#3A2B21" stroke-width="8"/>
+  <ellipse cx="62" cy="72" rx="34" ry="22" fill="#8A694A"/>
+  <ellipse cx="83" cy="57" rx="22" ry="18" fill="#8A694A"/>
+  <ellipse cx="74" cy="45" rx="6" ry="9" fill="#8A694A"/>
+  <ellipse cx="92" cy="48" rx="6" ry="9" fill="#8A694A"/>
+  <circle cx="79" cy="56" r="2.8" fill="#3A2B21"/>
+  <circle cx="91" cy="59" r="2.8" fill="#3A2B21"/>
+  <ellipse cx="95" cy="70" rx="7" ry="5" fill="#6D523A"/>
+  <rect x="58" y="30" width="34" height="24" rx="4" fill="#FFF8E8" stroke="#3A2B21" stroke-width="5" transform="rotate(-10 58 30)"/>
+  <path d="M61 35l11 8 11-8" fill="none" stroke="#F3B25F" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
