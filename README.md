@@ -42,19 +42,36 @@ capybara-letter/
 
 - Node 22+
 - pnpm 9+
-- OpenClaw 已安装（`npm i -g openclaw` 或从源码构建）
+- OpenClaw 源码 checkout（用于开发期间加载 plugin）
 
 ## 快速开始
 
 ### 1. 安装依赖
 
 ```bash
+cd capybara-letter
 pnpm install
 ```
 
-### 2. 注入 Agent 配置
+### 2. 部署 Plugin 到 OpenClaw
 
-将卡皮巴拉 Agent 注册到 OpenClaw：
+Plugin 需要放在 OpenClaw 的 `extensions/` 目录下才能被 Gateway 加载：
+
+```bash
+# 替换为你的 OpenClaw 源码路径
+OPENCLAW_DIR=~/Downloads/Project_2603/openclaw
+
+# 复制 plugin 到 OpenClaw extensions（已 gitignore）
+cp -R plugin "$OPENCLAW_DIR/extensions/edu-story"
+
+# 安装 OpenClaw 依赖（让 pnpm 发现新 plugin）
+cd "$OPENCLAW_DIR" && pnpm install
+
+# 构建（生成 plugin 运行时模块）
+pnpm build
+```
+
+### 3. 注入 Agent 配置
 
 ```bash
 # 替换 <REPO_PATH> 为本仓库的绝对路径
@@ -76,13 +93,13 @@ openclaw config set agents.list "$(openclaw config get agents.list | \
   ")"
 ```
 
-### 3. 注入 Channel 配置
+### 4. 注入 Channel 配置
 
 ```bash
 openclaw config set channels.edu-story '{"enabled":true,"port":18820,"host":"127.0.0.1","agentId":"capybara"}'
 ```
 
-### 4. 验证
+### 5. 验证
 
 ```bash
 openclaw agents list
@@ -92,15 +109,17 @@ openclaw channels status
 # 应看到: edu-story channel configured
 ```
 
-### 5. 启动
+### 6. 启动
 
-终端 1 — Gateway：
+终端 1 — Gateway（在 OpenClaw 目录下）：
 ```bash
-openclaw gateway run --bind loopback --port 18789
+cd $OPENCLAW_DIR
+pnpm openclaw gateway run --bind loopback --port 18789
 ```
 
-终端 2 — 前端：
+终端 2 — 前端（在本仓库目录下）：
 ```bash
+cd capybara-letter
 pnpm dev:frontend
 ```
 
@@ -140,4 +159,6 @@ pnpm check
 
 本仓库是独立产品代码。`plugin/` 目录是一个标准的 OpenClaw channel plugin，通过 `openclaw/plugin-sdk/*` 与 OpenClaw 交互。
 
-开发时，plugin 需要 OpenClaw 作为 peer dependency。生产部署时，plugin 安装到 OpenClaw 实例中运行。
+开发期间，plugin 以副本形式放在 OpenClaw 的 `extensions/edu-story/` 目录下（已加入 `.gitignore`），这样 pnpm workspace 能发现它、Gateway 能加载它。修改 plugin 代码后需要重新复制并 rebuild。
+
+生产部署时，plugin 将发布到 npm，用户通过 `openclaw plugins install @capybara-letter/plugin` 安装。
