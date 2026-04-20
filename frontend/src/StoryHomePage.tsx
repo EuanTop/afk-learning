@@ -664,7 +664,7 @@ export function StoryHomePage() {
 
   const bubbleStyle = {
     left: `clamp(1rem, calc(${bubbleAnchor.x}px - 9rem), calc(100vw - min(72vw, 22rem) - 1rem))`,
-    top: `max(6.5rem, calc(${bubbleAnchor.y}px - 10rem))`,
+    bottom: `calc(100dvh - ${bubbleAnchor.y}px + 4rem)`,
   };
 
   return (
@@ -711,18 +711,88 @@ export function StoryHomePage() {
         </div>
       </header>
 
-      <button
-        className="absolute z-20 max-w-[min(72vw,22rem)] text-left"
-        onClick={() => setLetterOpen(true)}
-        style={bubbleStyle}
-        type="button"
+      <div
+        className={[
+          "absolute z-20 text-left transition-all duration-300 ease-out",
+          letterOpen
+            ? "inset-x-4 top-20 bottom-28 sm:inset-x-8 sm:top-24 sm:bottom-32"
+            : "max-w-[min(72vw,22rem)]",
+        ].join(" ")}
+        style={letterOpen ? undefined : bubbleStyle}
       >
-        <div className="relative rounded-[1.9rem] border-4 border-stone-900 bg-[#fffdf6]/94 px-4 py-4 text-sm leading-7 shadow-[8px_8px_0_0_#2b2118] backdrop-blur-md sm:px-5 sm:text-[1.02rem]">
-          {latestCapybaraMessage}
-          <div className="absolute -bottom-4 left-16 h-0 w-0 border-l-[16px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-stone-900" />
-          <div className="absolute -bottom-3 left-[68px] h-0 w-0 border-l-[12px] border-r-[9px] border-t-[16px] border-l-transparent border-r-transparent border-t-[#fffdf6]" />
-        </div>
-      </button>
+        {letterOpen ? (
+          <div className="flex h-full flex-col rounded-[1.9rem] border-4 border-stone-900 bg-[#fffdf6]/96 p-5 shadow-[8px_8px_0_0_#2b2118] backdrop-blur-md">
+            <header className="mb-3 flex items-center justify-between">
+              <div className="inline-flex rounded-full border-[3px] border-stone-900 bg-[#ffefbf] px-3 py-1 text-xs font-black text-stone-700 shadow-[2px_2px_0_0_#2b2118]">
+                {currentStory?.title ?? "卡皮巴拉的来信"}
+              </div>
+              <button
+                aria-label="收起信件"
+                className="grid h-9 w-9 place-items-center rounded-full border-4 border-stone-900 bg-[#fffdf6] font-black shadow-[3px_3px_0_0_#2b2118]"
+                onClick={() => setLetterOpen(false)}
+                type="button"
+              >
+                ×
+              </button>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <div className="text-lg font-black text-stone-900">
+                {currentStory?.letter.greeting ?? IDLE_LETTER.greeting}
+              </div>
+              <div className="mt-3 space-y-3 text-[0.95rem] leading-8 text-stone-700">
+                {(currentStory?.letter.body ?? IDLE_LETTER.body).map((paragraph, index) => (
+                  <p key={`${paragraph}-${index}`}>{paragraph}</p>
+                ))}
+              </div>
+              <div className="mt-4 text-base font-semibold text-stone-800">
+                {currentStory?.letter.signoff ?? IDLE_LETTER.signoff}
+              </div>
+              <div className="mt-2 text-sm leading-7 text-stone-600">
+                {currentStory?.letter.postscript ?? IDLE_LETTER.postscript}
+              </div>
+
+              <section className="mt-5 rounded-[1.4rem] border-4 border-stone-900 bg-[#fff8e8] p-4 shadow-[4px_4px_0_0_#2b2118]">
+                <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">来信节奏</div>
+                <div className="mt-2 space-y-2 text-sm leading-7 text-stone-700">
+                  <p>{currentStory?.timeline.tonightQuestion ?? IDLE_TIMELINE.tonightQuestion}</p>
+                  <p>{currentStory?.timeline.capybaraPromise ?? IDLE_TIMELINE.capybaraPromise}</p>
+                  <p>{currentStory?.timeline.morningDelivery ?? IDLE_TIMELINE.morningDelivery}</p>
+                </div>
+              </section>
+
+              {currentStory?.research ? (
+                <section className="mt-4 rounded-[1.4rem] border-4 border-stone-900 bg-[#fff8e8] p-4 shadow-[4px_4px_0_0_#2b2118]">
+                  <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">真实线索</div>
+                  <div className="mt-2 space-y-2 text-sm leading-7 text-stone-700">
+                    <div className="font-semibold text-stone-800">{currentStory.research.title}</div>
+                    <p>{currentStory.research.summary}</p>
+                    <a
+                      className="inline-flex rounded-full border-4 border-stone-900 bg-[#fffdf6] px-4 py-2 font-black text-stone-800 shadow-[3px_3px_0_0_#2b2118]"
+                      href={currentStory.research.sourceUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      查看来源 · {currentStory.research.sourceLabel}
+                    </a>
+                  </div>
+                </section>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <button
+            className="block w-full text-left"
+            onClick={() => setLetterOpen(true)}
+            type="button"
+          >
+            <div className="relative rounded-[1.9rem] border-4 border-stone-900 bg-[#fffdf6]/94 px-4 py-4 text-sm leading-7 shadow-[8px_8px_0_0_#2b2118] backdrop-blur-md sm:px-5 sm:text-[1.02rem]">
+              {latestCapybaraMessage}
+              <div className="absolute -bottom-4 left-16 h-0 w-0 border-l-[16px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-stone-900" />
+              <div className="absolute -bottom-3 left-[68px] h-0 w-0 border-l-[12px] border-r-[9px] border-t-[16px] border-l-transparent border-r-transparent border-t-[#fffdf6]" />
+            </div>
+          </button>
+        )}
+      </div>
 
       <WordDock
         activeIndex={activeWordIndex}
@@ -910,63 +980,6 @@ export function StoryHomePage() {
             </div>
           </section>
         </div>
-      </Drawer>
-
-      <Drawer
-        onClose={() => setLetterOpen(false)}
-        open={letterOpen}
-        title={currentStory?.kind === "welcome" ? "欢迎信" : "今日来信"}
-      >
-        <article className="rounded-[1.8rem] border-4 border-stone-900 bg-[#fffdf6] p-5 shadow-[4px_4px_0_0_#2b2118]">
-          <div className="inline-flex rounded-full border-[3px] border-stone-900 bg-[#ffefbf] px-3 py-1 text-xs font-black text-stone-700 shadow-[2px_2px_0_0_#2b2118]">
-            {currentStory?.title ?? "卡皮巴拉的来信"}
-          </div>
-          <div className="mt-4 text-lg font-black text-stone-900">
-            {currentStory?.letter.greeting ?? IDLE_LETTER.greeting}
-          </div>
-          <div className="mt-4 space-y-4 text-base leading-8 text-stone-700">
-            {(currentStory?.letter.body ?? IDLE_LETTER.body).map((paragraph, index) => (
-              <p key={`${paragraph}-${index}`}>{paragraph}</p>
-            ))}
-          </div>
-          <div className="mt-5 text-base font-semibold text-stone-800">
-            {currentStory?.letter.signoff ?? IDLE_LETTER.signoff}
-          </div>
-          <div className="mt-2 text-sm leading-7 text-stone-600">
-            {currentStory?.letter.postscript ?? IDLE_LETTER.postscript}
-          </div>
-        </article>
-
-        <section className="mt-5 rounded-[1.6rem] border-4 border-stone-900 bg-[#fff8e8] p-4 shadow-[4px_4px_0_0_#2b2118]">
-          <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">
-            来信节奏
-          </div>
-          <div className="mt-3 space-y-3 text-sm leading-7 text-stone-700">
-            <p>{currentStory?.timeline.tonightQuestion ?? IDLE_TIMELINE.tonightQuestion}</p>
-            <p>{currentStory?.timeline.capybaraPromise ?? IDLE_TIMELINE.capybaraPromise}</p>
-            <p>{currentStory?.timeline.morningDelivery ?? IDLE_TIMELINE.morningDelivery}</p>
-          </div>
-        </section>
-
-        {currentStory?.research ? (
-          <section className="mt-5 rounded-[1.6rem] border-4 border-stone-900 bg-[#fff8e8] p-4 shadow-[4px_4px_0_0_#2b2118]">
-            <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">
-              真实线索
-            </div>
-            <div className="mt-3 space-y-2 text-sm leading-7 text-stone-700">
-              <div className="font-semibold text-stone-800">{currentStory.research.title}</div>
-              <p>{currentStory.research.summary}</p>
-              <a
-                className="inline-flex rounded-full border-4 border-stone-900 bg-[#fffdf6] px-4 py-2 font-black text-stone-800 shadow-[3px_3px_0_0_#2b2118]"
-                href={currentStory.research.sourceUrl}
-                rel="noreferrer"
-                target="_blank"
-              >
-                查看来源 · {currentStory.research.sourceLabel}
-              </a>
-            </div>
-          </section>
-        ) : null}
       </Drawer>
 
       {(bootstrapping || loading) && !error ? (
