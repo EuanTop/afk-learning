@@ -492,8 +492,13 @@ export function StoryHomePage() {
 
   const currentStory = session?.currentStory ?? null;
   const displayScene = activePreview?.scene ?? currentStory?.scene ?? IDLE_SCENE;
-  const displayStatus =
-    pendingJourney || session?.status === "adventuring" ? "正在冒险" : "正在回信";
+  const displayStatus = pendingJourney
+    ? "正在冒险"
+    : session?.status === "adventuring"
+      ? "正在冒险"
+      : loading
+        ? "正在回信"
+        : "等你许愿";
   const displaySubtitle =
     currentStory?.subtitle ?? "每天晚上许愿，第二天早晨收到一封会继续成长的信。";
 
