@@ -752,10 +752,10 @@ export const IDLE_LETTER: StoryLetter = {
   greeting: "亲爱的小探险家：",
   body: [
     "今晚先把你明天想听的主题交给卡皮巴拉。",
-    "只有查找和生成都成功后，它才会把真正的小信送回来。",
+    "它会带着你的愿望出发，去寻找真实的线索和故事。",
   ],
   signoff: "在信箱边等你的卡皮巴拉",
-  postscript: "P.S. 这版不再用手写教学内容顶替真实生成结果。",
+  postscript: "P.S. 试试在下面的输入框里告诉我，你最想知道什么？",
 };
 
 export const IDLE_SHOWCASE: PixelDemo[] = [

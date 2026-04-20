@@ -662,9 +662,16 @@ export function StoryHomePage() {
     recognition.start();
   };
 
-  const bubbleStyle = {
+  const bubbleStyle: React.CSSProperties = {
     left: `clamp(1rem, calc(${bubbleAnchor.x}px - 9rem), calc(100vw - min(72vw, 22rem) - 1rem))`,
-    bottom: `calc(100dvh - ${bubbleAnchor.y}px + 4rem)`,
+    top: `clamp(5.5rem, calc(${bubbleAnchor.y}px - 14rem), calc(100dvh - 16rem))`,
+  };
+
+  const letterStyle: React.CSSProperties = {
+    left: `clamp(1rem, calc(${bubbleAnchor.x}px - 12rem), calc(100vw - 25rem))`,
+    top: `clamp(5rem, calc(${bubbleAnchor.y}px - 18rem), 6rem)`,
+    maxWidth: "min(90vw, 26rem)",
+    maxHeight: "calc(100dvh - 12rem)",
   };
 
   return (
@@ -714,14 +721,12 @@ export function StoryHomePage() {
       <div
         className={[
           "absolute z-20 text-left transition-all duration-300 ease-out",
-          letterOpen
-            ? "inset-x-4 top-20 bottom-28 sm:inset-x-8 sm:top-24 sm:bottom-32"
-            : "max-w-[min(72vw,22rem)]",
+          letterOpen ? "" : "max-w-[min(72vw,22rem)]",
         ].join(" ")}
-        style={letterOpen ? undefined : bubbleStyle}
+        style={letterOpen ? letterStyle : bubbleStyle}
       >
         {letterOpen ? (
-          <div className="flex h-full flex-col rounded-[1.9rem] border-4 border-stone-900 bg-[#fffdf6]/96 p-5 shadow-[8px_8px_0_0_#2b2118] backdrop-blur-md">
+          <div className="flex max-h-full flex-col rounded-[1.9rem] border-4 border-stone-900 bg-[#fffdf6]/96 p-5 shadow-[8px_8px_0_0_#2b2118] backdrop-blur-md">
             <header className="mb-3 flex items-center justify-between">
               <div className="inline-flex rounded-full border-[3px] border-stone-900 bg-[#ffefbf] px-3 py-1 text-xs font-black text-stone-700 shadow-[2px_2px_0_0_#2b2118]">
                 {currentStory?.title ?? "卡皮巴拉的来信"}
