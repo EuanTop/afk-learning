@@ -1,4 +1,5 @@
 import { ageBandFromAge, type LearnerProfile, type StoryTurnResponse } from "./shared/types.js";
+import { buildFallbackCapybaraScene } from "./story-scene-fallback.js";
 
 function isEarlyEnglishLevel(level: string): boolean {
   return /10-15|16-21|<A1|启蒙|起步/i.test(level);
@@ -37,32 +38,12 @@ export function buildBootstrapWelcomeStory(params: {
       capybaraPromise: "你先许愿，我去找线索，等到明晚 20:30 左右把信送回来。",
       morningDelivery: "明晚打开这里，就能看到我带回来的信。",
     },
-    scene: {
+    scene: buildFallbackCapybaraScene({
       title: "卡皮巴拉在等你",
       mood: "warm",
-      palette: [
-        { id: "sky", value: "#b9d3f2" },
-        { id: "mist", value: "#eef5ff" },
-        { id: "pond", value: "#8bb6df" },
-        { id: "grass", value: "#7da66d" },
-        { id: "paper", value: "#fff6df" },
-        { id: "wood", value: "#8a633f" },
-      ],
-      layers: [],
-      actors: [
-        {
-          id: "capybara-main",
-          kind: "capybara",
-          x: 50,
-          y: 78,
-          size: 28,
-          facing: "right",
-          motion: "still",
-        },
-      ],
       prompt: "warm capybara waiting beside a mailbox for tonight's wish",
       motionCue: "卡皮巴拉安静站在收信台边，等你把明天想听的主题告诉它。",
-    },
+    }),
     narration: "这是一封欢迎信。从今晚开始，卡皮巴拉会替你出发找线索，并在下一次固定送信时间把内容寄回来。",
     wordSpotlight: {
       focusWord: "letter",
@@ -127,8 +108,8 @@ export function buildBootstrapWelcomeStory(params: {
       },
       {
         id: "msg-2",
-        speaker: "narrator",
-        text: "今晚先许愿，明天卡皮巴拉就会把第一封真正的信送回来。",
+        speaker: "capybara",
+        text: "如果你还没想好，我也可以先去带一封关于海洋、森林或星空的信回来。",
       },
     ],
     task: {
@@ -157,6 +138,6 @@ export function buildBootstrapWelcomeStory(params: {
         },
       ],
     },
-    suggestedReply: "明天我想听海洋/森林/星空的故事。",
+    suggestedReply: "明天我想听海洋里的动物为什么会发光。",
   };
 }

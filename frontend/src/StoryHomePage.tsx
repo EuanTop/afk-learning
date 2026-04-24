@@ -38,10 +38,17 @@ import {
   toLocalDateKey,
 } from "./story-time";
 import { useCapybaraChannel } from "./useCapybaraChannel";
+import type { StoryScene } from "@capybara-letter/shared";
 
 type SettingsState = {
   age: number;
   englishLevelId: string;
+};
+
+type QuickWishOption = {
+  id: string;
+  label: string;
+  text: string;
 };
 
 type PendingJourneyState = {
@@ -114,6 +121,92 @@ function readStoredJson<T>(key: string, fallback: T, legacyKeys: string[] = []):
   }
 }
 
+function clearStoredJson(key: string, legacyKeys: string[] = []) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(key);
+  legacyKeys.forEach((legacyKey) => {
+    window.localStorage.removeItem(legacyKey);
+  });
+}
+
+function getMissingReferencedDeliveryIds(snapshot: StorySessionSnapshot): string[] {
+  const deliveryIds = new Set(snapshot.deliveryLog.map((delivery) => delivery.id));
+  const referencedIds = new Set(
+    snapshot.history
+      .map((entry) => entry.sourceDeliveryId?.trim())
+      .filter((value): value is string => Boolean(value)),
+  );
+
+  return [...referencedIds].filter((deliveryId) => !deliveryIds.has(deliveryId));
+}
+
+function getMockHistoryDeliveryCount(snapshot: StorySessionSnapshot): number {
+  const deliveryIndexes = new Set<number>();
+
+  snapshot.history.forEach((entry) => {
+    const historyMatch = entry.id.match(/^delivery-(\d+)-/);
+    if (historyMatch) {
+      deliveryIndexes.add(Number(historyMatch[1]));
+    }
+
+    const sourceMatch = entry.sourceDeliveryId?.match(/^mock-delivery-(\d+)$/);
+    if (sourceMatch) {
+      deliveryIndexes.add(Number(sourceMatch[1]));
+    }
+  });
+
+  return deliveryIndexes.size;
+}
+
+function sanitizeStoredSessionSnapshot(
+  snapshot: StorySessionSnapshot | null,
+  expectedSessionId: string | null,
+): StorySessionSnapshot | null {
+  if (!snapshot) {
+    return null;
+  }
+
+  if (expectedSessionId && snapshot.sessionId !== expectedSessionId) {
+    return null;
+  }
+
+  if (getMissingReferencedDeliveryIds(snapshot).length > 0) {
+    return null;
+  }
+
+  const mockHistoryDeliveryCount = getMockHistoryDeliveryCount(snapshot);
+  if (mockHistoryDeliveryCount > snapshot.deliveryLog.length) {
+    return null;
+  }
+
+  return snapshot;
+}
+
+function readStoredSessionSnapshot(expectedSessionId: string | null): StorySessionSnapshot | null {
+  const stored = readStoredJson<StorySessionSnapshot | null>(
+    SESSION_CACHE_STORAGE_KEY,
+    null,
+    LEGACY_SESSION_CACHE_STORAGE_KEYS,
+  );
+  const sanitized = sanitizeStoredSessionSnapshot(stored, expectedSessionId);
+  if (stored && !sanitized) {
+    clearStoredJson(SESSION_CACHE_STORAGE_KEY, LEGACY_SESSION_CACHE_STORAGE_KEYS);
+    if (import.meta.env.DEV) {
+      console.info("[StoryHomePage] dropped stale cached session snapshot", {
+        cachedSessionId: stored.sessionId,
+        expectedSessionId,
+        missingReferencedDeliveryIds: getMissingReferencedDeliveryIds(stored),
+        mockHistoryDeliveryCount: getMockHistoryDeliveryCount(stored),
+        deliveryLogCount: stored.deliveryLog.length,
+      });
+    }
+  }
+  return sanitized;
+}
+
 function formatTime(iso: string): string {
   try {
     return new Intl.DateTimeFormat("zh-CN", {
@@ -177,6 +270,66 @@ function groupHistoryByDate(entries: ConversationEntry[]) {
   }
 
   return grouped;
+}
+
+function buildHistorySections(
+  entries: ConversationEntry[],
+  deliveryLog: StoryDeliveryRecord[],
+) {
+  const sections = new Map<
+    string,
+    {
+      key: string;
+      label: string;
+      anchorTime: number;
+      entries: ConversationEntry[];
+      deliveries: StoryDeliveryRecord[];
+    }
+  >();
+
+  const ensureSection = (key: string, label: string, timestamp: number) => {
+    const existing = sections.get(key);
+    if (existing) {
+      existing.anchorTime = Math.max(existing.anchorTime, timestamp);
+      return existing;
+    }
+    const created = {
+      key,
+      label,
+      anchorTime: timestamp,
+      entries: [] as ConversationEntry[],
+      deliveries: [] as StoryDeliveryRecord[],
+    };
+    sections.set(key, created);
+    return created;
+  };
+
+  entries.forEach((entry) => {
+    const timestamp = new Date(entry.time).getTime();
+    const key = historyDateKey(entry.time);
+    ensureSection(key, formatHistoryDateLabel(entry.time), timestamp).entries.push(entry);
+  });
+
+  deliveryLog.forEach((delivery) => {
+    const timestamp = new Date(delivery.deliveredAt).getTime();
+    const key = toLocalDateKey(delivery.deliveredAt);
+    ensureSection(key, formatHistoryDateLabel(delivery.deliveredAt), timestamp).deliveries.push(
+      delivery,
+    );
+  });
+
+  return [...sections.values()]
+    .map((section) => ({
+      ...section,
+      entries: [...section.entries].sort(
+        (left, right) => new Date(right.time).getTime() - new Date(left.time).getTime(),
+      ),
+      deliveries: [...section.deliveries].sort(
+        (left, right) =>
+          new Date(right.deliveredAt).getTime() - new Date(left.deliveredAt).getTime(),
+      ),
+    }))
+    .sort((left, right) => right.anchorTime - left.anchorTime);
 }
 
 function formatDueText(iso: string): string {
@@ -251,6 +404,124 @@ function buildDisplayedWordCards(params: {
   });
 }
 
+function sceneHasRenderableContent(scene: StoryScene | null | undefined): scene is StoryScene {
+  return Boolean(scene && scene.layers.length > 0);
+}
+
+function ensureRenderableScene(scene: StoryScene | null | undefined): StoryScene {
+  if (sceneHasRenderableContent(scene)) {
+    return scene;
+  }
+  return IDLE_SCENE;
+}
+
+function normalizeWishText(value: string): string {
+  const trimmed = value.trim().replace(/[。！？!?.\s]+$/g, "");
+  if (!trimmed) {
+    return "明天我想听一个新故事。";
+  }
+  if (/^明天|^我想|^我还想|^请给我/i.test(trimmed)) {
+    return `${trimmed}。`;
+  }
+  return `明天我想听${trimmed}。`;
+}
+
+function buildTomorrowWishOptions(params: {
+  story: StorySessionSnapshot["currentStory"];
+  environment: StorySessionSnapshot["environment"] | undefined;
+  learner: StorySessionSnapshot["learnerProfile"] | undefined;
+}): QuickWishOption[] {
+  const options: QuickWishOption[] = [];
+  const seen = new Set<string>();
+
+  const push = (label: string, text: string) => {
+    const normalized = normalizeWishText(text);
+    if (seen.has(normalized)) {
+      return;
+    }
+    seen.add(normalized);
+    options.push({
+      id: `${label}-${options.length + 1}`,
+      label,
+      text: normalized,
+    });
+  };
+
+  if (params.story?.suggestedReply) {
+    push("卡皮巴拉推荐", params.story.suggestedReply);
+  }
+
+  if (params.story?.plan?.topic) {
+    push("继续探索", `${params.story.plan.topic}里还有什么我不知道的秘密`);
+  }
+
+  const weather = params.environment?.weather?.condition ?? "";
+  if (/雨|rain/i.test(weather)) {
+    push("天气灵感", "雨为什么会从云里落下来");
+  } else if (/晴|sun/i.test(weather)) {
+    push("天气灵感", "太阳为什么会发光发热");
+  } else if (/风|wind/i.test(weather)) {
+    push("天气灵感", "风为什么看不见却能吹动树叶");
+  }
+
+  const event = params.environment?.event ?? "";
+  if (/科技馆|museum|火箭|rocket/i.test(event)) {
+    push("今天继续", "火箭为什么能飞到天上");
+  } else if (/动物园|zoo/i.test(event)) {
+    push("今天继续", "长颈鹿的脖子为什么那么长");
+  }
+
+  const interests = params.learner?.interests ?? [];
+  interests.forEach((interest) => {
+    if (/动物|animal/i.test(interest)) {
+      push("兴趣推荐", "海豚为什么喜欢跳出水面");
+      return;
+    }
+    if (/森林|nature|植物|plant/i.test(interest)) {
+      push("兴趣推荐", "森林里的叶子为什么颜色不一样");
+      return;
+    }
+    if (/太空|space|星/i.test(interest)) {
+      push("兴趣推荐", "月亮为什么有时候圆有时候弯");
+    }
+  });
+
+  if (params.environment?.parentNote) {
+    push("家长线索", "想听一个和今天生活有关、能学新英文单词的故事");
+  }
+
+  return options.slice(0, 4);
+}
+
+function resolveHistoryEntryDeliveryId(
+  entry: ConversationEntry,
+  deliveryLog: StoryDeliveryRecord[],
+): string | null {
+  if (entry.sourceDeliveryId && deliveryLog.some((delivery) => delivery.id === entry.sourceDeliveryId)) {
+    return entry.sourceDeliveryId;
+  }
+
+  if (entry.role === "user") {
+    return null;
+  }
+
+  const exactMatch = deliveryLog.find((delivery) =>
+    delivery.story.messages.some(
+      (message) => message.speaker === entry.role && message.text.trim() === entry.text.trim(),
+    ),
+  );
+  if (exactMatch) {
+    return exactMatch.id;
+  }
+
+  const sameDay = deliveryLog.filter((delivery) => toLocalDateKey(delivery.deliveredAt) === toLocalDateKey(entry.time));
+  if (sameDay.length === 1) {
+    return sameDay[0]?.id ?? null;
+  }
+
+  return null;
+}
+
 function iconButtonClass(active = false): string {
   return [
     "grid h-12 w-12 place-items-center rounded-full border-4 border-stone-900 shadow-[4px_4px_0_0_#2b2118] transition",
@@ -279,6 +550,22 @@ function HistoryIcon() {
       <path d="M3 12a9 9 0 1 0 3-6.7" />
       <path d="M3 4v5h5" />
       <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
+function LetterIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-4 w-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M3 6h18v12H3z" />
+      <path d="m4 7 8 6 8-6" />
     </svg>
   );
 }
@@ -454,16 +741,15 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
       englishLevelId: DEFAULT_ENGLISH_LEVEL_ID,
     }, LEGACY_SETTINGS_STORAGE_KEYS),
   );
-  const [session, setSession] = useState<StorySessionSnapshot | null>(() =>
-    readStoredJson<StorySessionSnapshot | null>(
-      SESSION_CACHE_STORAGE_KEY,
-      null,
-      LEGACY_SESSION_CACHE_STORAGE_KEYS,
-    ),
-  );
   const [sessionId, setSessionId] = useState<string | null>(() =>
     mockOptions.sessionId ??
       readStoredJson<string | null>(SESSION_ID_STORAGE_KEY, null, LEGACY_SESSION_ID_STORAGE_KEYS),
+  );
+  const [session, setSession] = useState<StorySessionSnapshot | null>(() =>
+    readStoredSessionSnapshot(
+      mockOptions.sessionId ??
+        readStoredJson<string | null>(SESSION_ID_STORAGE_KEY, null, LEGACY_SESSION_ID_STORAGE_KEYS),
+    ),
   );
   const [form, setForm] = useState({
     message: "",
@@ -640,7 +926,11 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
       pendingJourney
         ? buildAdventurePreview({
             phase: pendingJourney.phase,
-            baseScene: currentStory?.scene ?? latestAvailableDelivery?.story.scene ?? null,
+            baseScene:
+              (sceneHasRenderableContent(currentStory?.scene) ? currentStory?.scene : null) ??
+              (sceneHasRenderableContent(latestAvailableDelivery?.story.scene)
+                ? latestAvailableDelivery?.story.scene
+                : null),
           })
         : null,
     [currentStory?.scene, latestAvailableDelivery?.story.scene, pendingJourney],
@@ -669,7 +959,7 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
     streamPreview,
   ]);
 
-  const displayScene = activePreview?.scene ?? currentStory?.scene ?? IDLE_SCENE;
+  const displayScene = ensureRenderableScene(activePreview?.scene ?? currentStory?.scene);
   const displayStatus = pendingJourney
     ? "正在冒险"
     : displaySession?.status === "adventuring"
@@ -690,20 +980,20 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
   );
 
   const allWordCards = displaySession?.wordBank ?? [];
-  const historyGroups = useMemo(
-    () => groupHistoryByDate(displaySession?.history ?? []),
-    [displaySession?.history],
+  const historySections = useMemo(
+    () => buildHistorySections(displaySession?.history ?? [], deliveryLog),
+    [deliveryLog, displaySession?.history],
   );
-  const deliveriesByDate = useMemo(() => {
-    const groups = new Map<string, StoryDeliveryRecord[]>();
-    deliveryLog.forEach((entry) => {
-      const key = toLocalDateKey(entry.deliveredAt);
-      const list = groups.get(key) ?? [];
-      list.push(entry);
-      groups.set(key, list);
+  const deliveryIdsByHistoryEntryId = useMemo(() => {
+    const result = new Map<string, string>();
+    (displaySession?.history ?? []).forEach((entry) => {
+      const deliveryId = resolveHistoryEntryDeliveryId(entry, deliveryLog);
+      if (deliveryId) {
+        result.set(entry.id, deliveryId);
+      }
     });
-    return groups;
-  }, [deliveryLog]);
+    return result;
+  }, [deliveryLog, displaySession?.history]);
 
   useEffect(() => {
     setActiveWordIndex(0);
@@ -742,57 +1032,6 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
         }));
       }, 1_300),
     ];
-  };
-
-  const submit = () => {
-    if (mockOptions.forceMock) {
-      setHint("当前正在查看时间线 Mock Data。切回真实模式后，就能真的把愿望交给卡皮巴拉。");
-      return;
-    }
-    const message = form.message.trim();
-    if (!message || loading || bootstrapping) {
-      return;
-    }
-
-    const requestId = crypto.randomUUID();
-    const nextSessionId = sessionId ?? crypto.randomUUID();
-    const optimisticEntry = {
-      id: `user-${requestId}`,
-      role: "user" as const,
-      text: message,
-      time: new Date().toISOString(),
-    };
-
-    setLoading(true);
-    setError(null);
-    setHint(null);
-    setStreamPreview("");
-    setForm({ message: "" });
-    setSelectedDeliveryId(null);
-    setSessionId(nextSessionId);
-    setSession((current) => ({
-      sessionId: nextSessionId,
-      createdAt: current?.createdAt ?? optimisticEntry.time,
-      updatedAt: optimisticEntry.time,
-      status: "adventuring",
-      currentStory: current?.currentStory ?? null,
-      deliveryLog: current?.deliveryLog ?? [],
-      history: [...(current?.history ?? []), optimisticEntry],
-      wordBank: current?.wordBank ?? [],
-      preferences: current?.preferences ?? DEFAULT_STORY_EXPERIENCE_SETTINGS,
-      runtime: current?.runtime ?? DEFAULT_STORY_RUNTIME_CONFIG,
-    }));
-    startJourney(requestId);
-
-    const sent = sendMessage(message);
-    if (!sent) {
-      resetJourney();
-      setLoading(false);
-      setError("未连接到卡皮巴拉频道，请稍后再试");
-      if (import.meta.env.DEV) {
-        setHint(DEV_BACKEND_HINT);
-      }
-    }
   };
 
   const submitWordReview = useCallback(
@@ -869,14 +1108,92 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
     recognition.start();
   };
 
+  const tomorrowWishOptions = useMemo(
+    () =>
+      buildTomorrowWishOptions({
+        story: currentStory,
+        environment: displaySession?.environment,
+        learner: displaySession?.learnerProfile,
+      }),
+    [currentStory, displaySession?.environment, displaySession?.learnerProfile],
+  );
+
   const openDeliveryExperience = useCallback((deliveryId: string) => {
-    setSelectedDeliveryId(deliveryId);
-    setActiveWordIndex(0);
-    setLetterOpen(true);
     setHistoryOpen(false);
     setCurrentView("home");
     window.history.pushState(null, "", "/");
+    setSelectedDeliveryId(deliveryId);
+    setActiveWordIndex(0);
+    setLetterOpen(false);
+    window.requestAnimationFrame(() => {
+      setLetterOpen(true);
+    });
   }, []);
+
+  const submitMessage = useCallback(
+    (rawMessage?: string) => {
+      if (mockOptions.forceMock) {
+        if (rawMessage?.trim()) {
+          setForm({ message: rawMessage.trim() });
+        }
+        setHint("当前正在查看时间线 Mock Data。切回真实模式后，就能真的把愿望交给卡皮巴拉。");
+        return;
+      }
+
+      const message = (rawMessage ?? form.message).trim();
+      if (!message || loading || bootstrapping) {
+        return;
+      }
+
+      const requestId = crypto.randomUUID();
+      const nextSessionId = sessionId ?? crypto.randomUUID();
+      const optimisticEntry = {
+        id: `user-${requestId}`,
+        role: "user" as const,
+        text: message,
+        time: new Date().toISOString(),
+      };
+
+      setLoading(true);
+      setError(null);
+      setHint(null);
+      setStreamPreview("");
+      setForm({ message: "" });
+      setSelectedDeliveryId(null);
+      setSessionId(nextSessionId);
+      setSession((current) => ({
+        sessionId: nextSessionId,
+        createdAt: current?.createdAt ?? optimisticEntry.time,
+        updatedAt: optimisticEntry.time,
+        status: "adventuring",
+        currentStory: current?.currentStory ?? null,
+        deliveryLog: current?.deliveryLog ?? [],
+        history: [...(current?.history ?? []), optimisticEntry],
+        wordBank: current?.wordBank ?? [],
+        preferences: current?.preferences ?? DEFAULT_STORY_EXPERIENCE_SETTINGS,
+        runtime: current?.runtime ?? DEFAULT_STORY_RUNTIME_CONFIG,
+      }));
+      startJourney(requestId);
+
+      const sent = sendMessage(message);
+      if (!sent) {
+        resetJourney();
+        setLoading(false);
+        setError("未连接到卡皮巴拉频道，请稍后再试");
+        if (import.meta.env.DEV) {
+          setHint(DEV_BACKEND_HINT);
+        }
+      }
+    },
+    [
+      bootstrapping,
+      form.message,
+      loading,
+      mockOptions.forceMock,
+      sendMessage,
+      sessionId,
+    ],
+  );
 
   if (currentView === "review") {
     return (
@@ -1018,6 +1335,31 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
             </div>
           </section>
         ) : null}
+
+        {currentStory ? (
+          <section className="mt-4 rounded-[1.4rem] border-4 border-stone-900 bg-[#fff4c7] p-4 shadow-[4px_4px_0_0_#2b2118]">
+            <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">
+              明晚继续
+            </div>
+            <div className="mt-2 text-sm leading-7 text-stone-800">
+              卡皮巴拉：明天你还想让我去找什么？如果你暂时没有想法，我先给你几个主意。
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {tomorrowWishOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  disabled={loading || bootstrapping}
+                  onClick={() => submitMessage(option.text)}
+                  className="inline-flex items-center gap-2 rounded-full border-4 border-stone-900 bg-[#fffdf6] px-3 py-2 text-xs font-black shadow-[3px_3px_0_0_#2b2118] disabled:opacity-60"
+                >
+                  <LetterIcon />
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </div>
     </div>
   ) : (
@@ -1155,7 +1497,7 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
-                    void submit();
+                    submitMessage();
                   }
                 }}
                 placeholder="告诉卡皮巴拉：明天我想听什么主题？"
@@ -1166,7 +1508,7 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
                 aria-label="发送愿望"
                 className="grid h-14 w-14 shrink-0 place-items-center rounded-full border-4 border-stone-900 bg-[#ffcf6e] shadow-[4px_4px_0_0_#2b2118] transition hover:bg-[#ffd881] disabled:opacity-60"
                 disabled={loading || bootstrapping}
-                onClick={() => void submit()}
+                onClick={() => submitMessage()}
                 type="button"
               >
                 <SendIcon />
@@ -1177,32 +1519,33 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
       </section>
 
       <Drawer onClose={() => setHistoryOpen(false)} open={historyOpen} title="历史会话">
-        {historyGroups.length === 0 ? (
+        {historySections.length === 0 ? (
           <div className="rounded-[1.5rem] border-4 border-dashed border-stone-900 bg-[#fffdf6] px-4 py-5 text-sm leading-7 text-stone-600">
             这里会按日期轴保留你和卡皮巴拉的完整会话，最新记录会在最上面。
           </div>
         ) : (
           <div className="space-y-5">
-            {historyGroups.map((group, index) => (
+            {historySections.map((group, index) => (
               <section key={group.key} className="grid grid-cols-[6.6rem,1fr] gap-3">
                 <div className="flex flex-col items-center">
                   <div className="rounded-[1.2rem] border-4 border-stone-900 bg-[#ffefbf] px-3 py-2 text-center text-xs font-black leading-5 text-stone-700 shadow-[3px_3px_0_0_#2b2118]">
                     {group.label}
                   </div>
-                  {index < historyGroups.length - 1 ? (
+                  {index < historySections.length - 1 ? (
                     <div className="mt-2 w-[5px] flex-1 rounded-full bg-stone-900/20" />
                   ) : null}
                 </div>
 
                 <div className="space-y-3">
-                  {(deliveriesByDate.get(group.key) ?? []).map((delivery) => (
+                  {group.deliveries.map((delivery) => (
                     <button
                       key={delivery.id}
                       type="button"
                       onClick={() => openDeliveryExperience(delivery.id)}
                       className="block w-full rounded-[1.5rem] border-4 border-stone-900 bg-[#fff4c7] px-4 py-3 text-left shadow-[4px_4px_0_0_#2b2118] transition hover:bg-[#fff0b3]"
                     >
-                      <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">
+                      <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-stone-500">
+                        <LetterIcon />
                         来信 · {formatTime(delivery.deliveredAt)}
                       </div>
                       <div className="mt-1 text-base font-black text-stone-900">
@@ -1224,13 +1567,16 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
                             : "bg-[#f2ead8]"
                       }`}
                     >
-                      {entry.role === "capybara" && entry.sourceDeliveryId ? (
+                      {entry.role === "capybara" && deliveryIdsByHistoryEntryId.get(entry.id) ? (
                         <button
                           type="button"
-                          onClick={() => openDeliveryExperience(entry.sourceDeliveryId!)}
+                          onClick={() =>
+                            openDeliveryExperience(deliveryIdsByHistoryEntryId.get(entry.id)!)
+                          }
                           className="block w-full text-left"
                         >
-                          <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">
+                          <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-stone-500">
+                            <LetterIcon />
                             卡皮巴拉 · {formatTime(entry.time)}
                           </div>
                           <div className="mt-1">{entry.text}</div>

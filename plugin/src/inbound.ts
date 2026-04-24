@@ -75,7 +75,8 @@ export async function handleCapybaraLetterInbound(params: {
     "- compose_lesson.draft.task must include vocabulary and exactly 3 choices.",
     "- Every vocabularyCards[i].word must appear verbatim in the visible lesson content.",
     "- Every vocabularyCards[i].example must be copied from the visible lesson content, not invented as an extra sentence.",
-    "- After compose_lesson succeeds, reply with one short in-character line that matches the delivered letter.",
+    "- compose_lesson.draft.suggestedReply should be one concrete next-topic sentence the child can directly send if they want a recommendation.",
+    "- After compose_lesson succeeds, reply with one short in-character line that asks what tomorrow's theme should be. If the child may not know, offer one concrete recommendation based on weather, parent note, event, or learner interests.",
   ].join("\n");
   const learnerContext = [
     sessionSnapshot.learnerProfile

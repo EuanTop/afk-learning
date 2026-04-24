@@ -17,6 +17,7 @@ import {
   type StoryWordCard,
   type StoryWordRating,
 } from "../shared/types.js";
+import { ensureRenderableScene } from "../story-scene-fallback.js";
 import { Rating, State, createEmptyCard, fsrs, type Card } from "ts-fsrs";
 
 const studyScheduler = fsrs({
@@ -202,6 +203,7 @@ function normalizeStoryRecord(entry: StoryDeliveryRecord): {
   entry: StoryDeliveryRecord;
   removedWordIds: Set<string>;
 } {
+  const normalizedScene = ensureRenderableScene(entry.story.scene);
   const corpus = buildVisibleStoryCorpus(entry.story);
   const anchoredCards = entry.story.vocabularyCards.filter(
     (card) =>
@@ -210,7 +212,16 @@ function normalizeStoryRecord(entry: StoryDeliveryRecord): {
 
   if (anchoredCards.length < 2 || anchoredCards.length === entry.story.vocabularyCards.length) {
     return {
-      entry,
+      entry:
+        normalizedScene === entry.story.scene
+          ? entry
+          : {
+              ...entry,
+              story: {
+                ...entry.story,
+                scene: normalizedScene,
+              },
+            },
       removedWordIds: new Set<string>(),
     };
   }
@@ -232,6 +243,7 @@ function normalizeStoryRecord(entry: StoryDeliveryRecord): {
       ...entry,
       story: {
         ...entry.story,
+        scene: normalizedScene,
         vocabularyCards: anchoredCards,
         task: {
           ...entry.story.task,

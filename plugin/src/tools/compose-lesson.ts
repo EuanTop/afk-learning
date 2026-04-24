@@ -363,7 +363,10 @@ export function createComposeLessonTool(store: CapybaraLetterSessionStore): Comp
                 { minItems: 3, maxItems: 3 },
               ),
             }),
-            suggestedReply: Type.String(),
+            suggestedReply: Type.String({
+              description:
+                "One concrete next-topic sentence the child can directly send if they want a recommendation for tomorrow.",
+            }),
           },
           {
             description:

@@ -281,7 +281,77 @@ function createDefaultBaseScene(phase: MockTimelineScenePhase): StoryScene {
       { id: "shoreLight", value: "#8ea66b" },
       { id: "mist", value: "#eef5ff" },
     ],
-    layers: [],
+    layers: [
+      {
+        id: "sky",
+        depth: 0,
+        parallax: 0.2,
+        elements: [
+          {
+            id: "sky-top",
+            kind: "rect",
+            x: 0,
+            y: 0,
+            width: 100,
+            height: 52,
+            fill: "skyTop",
+          },
+          {
+            id: "sky-bottom",
+            kind: "rect",
+            x: 0,
+            y: 45,
+            width: 100,
+            height: 55,
+            fill: "skyBottom",
+          },
+          {
+            id: "sun",
+            kind: "ellipse",
+            x: 76,
+            y: 16,
+            width: 14,
+            height: 14,
+            fill: "glow",
+            alpha: 0.92,
+          },
+        ],
+      },
+      {
+        id: "ground",
+        depth: 1,
+        parallax: 0.9,
+        elements: [
+          {
+            id: "shore",
+            kind: "ellipse",
+            x: 10,
+            y: 68,
+            width: 78,
+            height: 24,
+            fill: "shore",
+          },
+          {
+            id: "grass-left",
+            kind: "ellipse",
+            x: 8,
+            y: 72,
+            width: 16,
+            height: 10,
+            fill: "leafMid",
+          },
+          {
+            id: "grass-right",
+            kind: "ellipse",
+            x: 72,
+            y: 73,
+            width: 18,
+            height: 10,
+            fill: "leafDark",
+          },
+        ],
+      },
+    ],
     actors: [
       {
         id: "capybara",
@@ -397,6 +467,34 @@ function buildTaskChoices(cards: VocabularyCard[]) {
   }));
 }
 
+function buildMockSuggestedReply(params: {
+  day: RawDay;
+  nextDay: RawDay | null;
+}): string {
+  if (params.nextDay?.eveningWish?.childText) {
+    return params.nextDay.eveningWish.childText;
+  }
+
+  const weather = params.day.environment.weather?.condition ?? "";
+  if (/雨|rain/i.test(weather)) {
+    return "明天我想听雨为什么会从云里掉下来。";
+  }
+  if (/科技馆|museum|火箭|rocket/i.test(params.day.environment.event ?? "")) {
+    return "明天我想听火箭为什么能飞到天上。";
+  }
+  return "明天我想听一个和今天生活有关的新故事。";
+}
+
+function buildMockFollowUpPrompt(params: {
+  day: RawDay;
+  nextDay: RawDay | null;
+}): string {
+  const recommended = buildMockSuggestedReply(params)
+    .replace(/^明天我想听|^明天我想知道/, "")
+    .replace(/[。！？!?.\s]+$/g, "");
+  return `明天你还想让我去找什么？如果你还没想好，我可以先去准备“${recommended}”。`;
+}
+
 function buildStoryFromDay(params: {
   day: RawDay;
   index: number;
@@ -405,6 +503,7 @@ function buildStoryFromDay(params: {
   previousCards: VocabularyCard[];
   sessionId: string;
   buildBaseScene?: MockTimelineBuildBaseScene;
+  nextDay?: RawDay | null;
 }) {
   const cardsSource =
     params.day.letterDelivery.vocabularyCards.length > 0
@@ -518,11 +617,11 @@ function buildStoryFromDay(params: {
       },
       {
         id: `msg-${params.index + 1}-2`,
-        speaker: "narrator",
-        text:
-          params.day.letterDelivery.research?.summary ??
-          params.day.letterDelivery.letter.body[1] ??
-          "\u5361\u76ae\u5df4\u62c9\u628a\u4eca\u5929\u7684\u53d1\u73b0\u8f7b\u8f7b\u653e\u8fdb\u4e86\u4fe1\u5c01\u3002",
+        speaker: "capybara",
+        text: buildMockFollowUpPrompt({
+          day: params.day,
+          nextDay: params.nextDay ?? null,
+        }),
       },
     ],
     task: {
@@ -535,15 +634,24 @@ function buildStoryFromDay(params: {
       rewardText: "\u7b54\u5bf9\u5566\uff0c\u8fd9\u4e2a\u8bcd\u5df2\u7ecf\u88ab\u4f60\u653e\u8fdb\u4eca\u5929\u7684\u8bb0\u5fc6\u91cc\u4e86\u3002",
       choices: buildTaskChoices(vocabularyCards),
     },
-    suggestedReply:
-      params.index + 1 < params.totalDays
-        ? "\u660e\u5929\u6211\u8fd8\u60f3\u542c\u65b0\u7684\u6545\u4e8b\u3002"
-        : "\u660e\u5929\u6211\u8fd8\u60f3\u542c\u65b0\u7684\u6545\u4e8b\u3002",
+    suggestedReply: buildMockSuggestedReply({
+      day: params.day,
+      nextDay: params.nextDay ?? null,
+    }),
   } satisfies StoryTurnResponse;
 }
 
 function pushHistoryEntry(list: ConversationEntry[], entry: ConversationEntry) {
   if (list.some((item) => item.id === entry.id)) {
+    return;
+  }
+  const last = list[list.length - 1];
+  if (last && last.role === entry.role && entry.role !== "narrator") {
+    last.text = `${last.text}\n${entry.text}`;
+    last.time = entry.time;
+    if (entry.sourceDeliveryId) {
+      last.sourceDeliveryId = entry.sourceDeliveryId;
+    }
     return;
   }
   list.push(entry);
@@ -643,6 +751,7 @@ export function buildTimelineMockSession(params: {
       previousCards,
       sessionId,
       buildBaseScene: params.buildBaseScene,
+      nextDay: days[index + 1] ?? null,
     });
     currentStory = story;
     deliveryLog.push({
