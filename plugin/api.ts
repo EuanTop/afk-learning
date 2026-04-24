@@ -4,23 +4,27 @@ import {
   createWikipediaResearchTool,
   createReviewWordTool,
   createGetSessionTool,
+  createComposeLessonTool,
+  createWeatherTool,
 } from "./src/tools/index.js";
-import { EduStorySessionStore } from "./src/tools/session-store.js";
+import { CapybaraLetterSessionStore } from "./src/tools/session-store.js";
 
 export * from "./src/accounts.js";
 export * from "./src/channel.js";
-export { setEduStoryRuntime } from "./src/runtime.js";
+export { setCapybaraLetterRuntime } from "./src/runtime.js";
 
-export function registerEduStoryTools(api: OpenClawPluginApi) {
+export function registerCapybaraLetterTools(api: OpenClawPluginApi) {
   const sessionsRoot = path.join(
     process.env.HOME ?? process.env.USERPROFILE ?? "/tmp",
     ".openclaw",
-    "edu-story",
+    "capybara-letter",
     "sessions",
   );
-  const store = new EduStorySessionStore(sessionsRoot);
+  const store = new CapybaraLetterSessionStore(sessionsRoot);
 
   api.registerTool(createWikipediaResearchTool() as unknown as AnyAgentTool);
   api.registerTool(createReviewWordTool(store) as unknown as AnyAgentTool);
   api.registerTool(createGetSessionTool(store) as unknown as AnyAgentTool);
+  api.registerTool(createComposeLessonTool(store) as unknown as AnyAgentTool);
+  api.registerTool(createWeatherTool() as unknown as AnyAgentTool);
 }

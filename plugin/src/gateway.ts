@@ -1,7 +1,10 @@
 import { WebSocketServer, type WebSocket } from "ws";
-import { handleEduStoryInbound } from "./inbound.js";
+import { handleCapybaraLetterInbound } from "./inbound.js";
 import type { ChannelGatewayContext } from "./runtime-api.js";
-import type { ClientFrame, CoreConfig, ResolvedEduStoryAccount, ServerFrame } from "./types.js";
+import { parseAgeYears } from "./shared/types.js";
+import { CapybaraLetterSessionStore } from "./tools/session-store.js";
+import type { ClientFrame, CoreConfig, ResolvedCapybaraLetterAccount, ServerFrame } from "./types.js";
+import { buildBootstrapWelcomeStory } from "./welcome-story.js";
 
 type ConnectedClient = {
   ws: WebSocket;
@@ -23,13 +26,85 @@ export function sendToClient(sessionId: string, frame: ServerFrame): boolean {
   return true;
 }
 
-export async function startEduStoryGatewayAccount(
+function resolveBootstrapAge(age: string | number): number {
+  if (typeof age === "number") {
+    return age;
+  }
+  return parseAgeYears(age);
+}
+
+function isBootstrapOnlySnapshot(snapshot: Awaited<ReturnType<CapybaraLetterSessionStore["read"]>>) {
+  if (!snapshot) {
+    return false;
+  }
+  return (
+    snapshot.currentStory?.kind === "welcome" &&
+    snapshot.history.length <= 2 &&
+    snapshot.wordBank.length <= 3
+  );
+}
+
+function bootstrapSnapshotScore(snapshot: NonNullable<Awaited<ReturnType<CapybaraLetterSessionStore["read"]>>>) {
+  let score = 0;
+  if (snapshot.history.length > 0) {
+    score += 1;
+  }
+  if (snapshot.history.length > 2) {
+    score += 2;
+  }
+  if (snapshot.currentStory?.kind === "lesson") {
+    score += 2;
+  }
+  if (snapshot.wordBank.length > 3) {
+    score += 1;
+  }
+  return score;
+}
+
+async function resolveBootstrapSnapshot(params: {
+  requestedSessionId?: string;
+  store: CapybaraLetterSessionStore;
+}) {
+  const requestedSessionId = params.requestedSessionId?.trim();
+  if (requestedSessionId) {
+    const requestedSnapshot = await params.store.read(requestedSessionId);
+    if (requestedSnapshot) {
+      if (isBootstrapOnlySnapshot(requestedSnapshot)) {
+        const latestSnapshot = await params.store.findLatestSnapshot();
+        if (
+          latestSnapshot &&
+          latestSnapshot.sessionId !== requestedSnapshot.sessionId &&
+          bootstrapSnapshotScore(latestSnapshot) > bootstrapSnapshotScore(requestedSnapshot)
+        ) {
+          return latestSnapshot;
+        }
+      }
+      return requestedSnapshot;
+    }
+  }
+
+  const latestSnapshot = await params.store.findLatestSnapshot();
+  if (latestSnapshot) {
+    return latestSnapshot;
+  }
+
+  if (!requestedSessionId) {
+    return null;
+  }
+
+  return await params.store.ensure(requestedSessionId);
+}
+
+export async function startCapybaraLetterGatewayAccount(
   channelId: string,
   channelLabel: string,
-  ctx: ChannelGatewayContext<ResolvedEduStoryAccount>,
+  ctx: ChannelGatewayContext<ResolvedCapybaraLetterAccount>,
 ) {
   const account = ctx.account;
   const { port, host } = account;
+
+  const sessionsRoot = `${process.env.HOME ?? process.env.USERPROFILE ?? "/tmp"}/.openclaw/capybara-letter/sessions`;
+  const store = new CapybaraLetterSessionStore(sessionsRoot);
 
   const wss = new WebSocketServer({ port, host });
 
@@ -59,11 +134,36 @@ export async function startEduStoryGatewayAccount(
       }
 
       if (frame.type === "bootstrap") {
-        clientSessionId = frame.sessionId ?? crypto.randomUUID();
+        const bootstrapSnapshot = await resolveBootstrapSnapshot({
+          requestedSessionId: frame.sessionId,
+          store,
+        });
+        clientSessionId = bootstrapSnapshot?.sessionId ?? frame.sessionId?.trim() ?? crypto.randomUUID();
         activeClients.set(clientSessionId, { ws, sessionId: clientSessionId });
+        const existingSnapshot = bootstrapSnapshot ?? (await store.ensure(clientSessionId));
+        const learnerProfile = {
+          name: existingSnapshot.learnerProfile?.name ?? "孩子",
+          age: resolveBootstrapAge(frame.age),
+          englishLevel: frame.englishLevel,
+          interests: existingSnapshot.learnerProfile?.interests ?? [],
+        };
+        let snapshot = await store.updateLearnerProfile({
+          sessionId: clientSessionId,
+          profile: learnerProfile,
+        });
+        if (!snapshot.currentStory && snapshot.history.length === 0) {
+          snapshot = await store.saveDeliveredStory({
+            sessionId: clientSessionId,
+            story: buildBootstrapWelcomeStory({
+              sessionId: clientSessionId,
+              profile: learnerProfile,
+            }),
+          });
+        }
         ws.send(
           JSON.stringify({ type: "connected", sessionId: clientSessionId } satisfies ServerFrame),
         );
+        ws.send(JSON.stringify({ type: "snapshot", payload: snapshot } satisfies ServerFrame));
         return;
       }
 
@@ -77,27 +177,72 @@ export async function startEduStoryGatewayAccount(
         return;
       }
 
-      if (frame.type === "message") {
-        await handleEduStoryInbound({
-          channelId,
-          channelLabel,
-          account,
-          config: ctx.cfg as CoreConfig,
-          sessionId: clientSessionId,
-          text: frame.text,
-          meta: frame.meta,
-        });
-      }
+      try {
+        if (frame.type === "message") {
+          await handleCapybaraLetterInbound({
+            channelId,
+            channelLabel,
+            account,
+            config: ctx.cfg as CoreConfig,
+            sessionId: clientSessionId,
+            store,
+            text: frame.text,
+            meta: frame.meta,
+          });
+        }
 
-      if (frame.type === "review-word") {
-        await handleEduStoryInbound({
-          channelId,
-          channelLabel,
-          account,
-          config: ctx.cfg as CoreConfig,
-          sessionId: clientSessionId,
-          text: `[word-review] cardId=${frame.cardId} rating=${frame.rating}`,
-        });
+        if (frame.type === "review-word") {
+          const snapshot = await store.applyWordReview({
+            sessionId: clientSessionId,
+            cardId: frame.cardId,
+            rating: frame.rating,
+          });
+          ws.send(JSON.stringify({ type: "snapshot", payload: snapshot } satisfies ServerFrame));
+          ws.send(JSON.stringify({ type: "status", state: "idle" } satisfies ServerFrame));
+        }
+
+        if (frame.type === "update-profile") {
+          const snapshot = await store.updateLearnerProfile({
+            sessionId: clientSessionId,
+            profile: frame.profile,
+          });
+          ws.send(JSON.stringify({ type: "snapshot", payload: snapshot } satisfies ServerFrame));
+          ws.send(JSON.stringify({ type: "status", state: "idle" } satisfies ServerFrame));
+        }
+
+        if (frame.type === "update-environment") {
+          const snapshot = await store.updateEnvironment({
+            sessionId: clientSessionId,
+            environment: frame.environment as import("./shared/types.js").Environment,
+          });
+          ws.send(JSON.stringify({ type: "snapshot", payload: snapshot } satisfies ServerFrame));
+          ws.send(JSON.stringify({ type: "status", state: "idle" } satisfies ServerFrame));
+        }
+
+        if (frame.type === "update-preferences") {
+          const snapshot = await store.updatePreferences({
+            sessionId: clientSessionId,
+            preferences: frame.preferences,
+          });
+          ws.send(JSON.stringify({ type: "snapshot", payload: snapshot } satisfies ServerFrame));
+          ws.send(JSON.stringify({ type: "status", state: "idle" } satisfies ServerFrame));
+        }
+
+        if (frame.type === "update-runtime") {
+          const snapshot = await store.updateRuntime({
+            sessionId: clientSessionId,
+            runtime: frame.runtime,
+          });
+          ws.send(JSON.stringify({ type: "snapshot", payload: snapshot } satisfies ServerFrame));
+          ws.send(JSON.stringify({ type: "status", state: "idle" } satisfies ServerFrame));
+        }
+      } catch (error) {
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            message: error instanceof Error ? error.message : "Channel request failed",
+          } satisfies ServerFrame),
+        );
       }
     });
 

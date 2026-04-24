@@ -1,4 +1,4 @@
 import { defineSetupPluginEntry } from "openclaw/plugin-sdk/channel-core";
-import { eduStoryPlugin } from "./src/channel.js";
+import { capybaraLetterPlugin } from "./src/channel.js";
 
-export default defineSetupPluginEntry(eduStoryPlugin);
+export default defineSetupPluginEntry(capybaraLetterPlugin);

@@ -2,39 +2,39 @@ import { createAccountListHelpers } from "openclaw/plugin-sdk/account-helpers";
 import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "openclaw/plugin-sdk/account-id";
 import { resolveMergedAccountConfig } from "openclaw/plugin-sdk/account-resolution";
 import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
-import type { CoreConfig, EduStoryAccountConfig, ResolvedEduStoryAccount } from "./types.js";
+import type { CoreConfig, CapybaraLetterAccountConfig, ResolvedCapybaraLetterAccount } from "./types.js";
 
 const DEFAULT_PORT = 18820;
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_AGENT_ID = "capybara";
 
 const {
-  listAccountIds: listEduStoryAccountIds,
-  resolveDefaultAccountId: resolveDefaultEduStoryAccountId,
-} = createAccountListHelpers("edu-story", { normalizeAccountId });
+  listAccountIds: listCapybaraLetterAccountIds,
+  resolveDefaultAccountId: resolveDefaultCapybaraLetterAccountId,
+} = createAccountListHelpers("capybara-letter", { normalizeAccountId });
 
-export { listEduStoryAccountIds, resolveDefaultEduStoryAccountId };
+export { listCapybaraLetterAccountIds, resolveDefaultCapybaraLetterAccountId };
 
-function resolveMergedEduStoryAccountConfig(
+function resolveMergedCapybaraLetterAccountConfig(
   cfg: CoreConfig,
   accountId: string,
-): EduStoryAccountConfig {
-  return resolveMergedAccountConfig<EduStoryAccountConfig>({
-    channelConfig: cfg.channels?.["edu-story"] as EduStoryAccountConfig | undefined,
-    accounts: cfg.channels?.["edu-story"]?.accounts,
+): CapybaraLetterAccountConfig {
+  return resolveMergedAccountConfig<CapybaraLetterAccountConfig>({
+    channelConfig: cfg.channels?.["capybara-letter"] as CapybaraLetterAccountConfig | undefined,
+    accounts: cfg.channels?.["capybara-letter"]?.accounts,
     accountId,
     omitKeys: ["defaultAccount"],
     normalizeAccountId,
   });
 }
 
-export function resolveEduStoryAccount(params: {
+export function resolveCapybaraLetterAccount(params: {
   cfg: CoreConfig;
   accountId?: string | null;
-}): ResolvedEduStoryAccount {
+}): ResolvedCapybaraLetterAccount {
   const accountId = normalizeAccountId(params.accountId);
-  const merged = resolveMergedEduStoryAccountConfig(params.cfg, accountId);
-  const baseEnabled = params.cfg.channels?.["edu-story"]?.enabled !== false;
+  const merged = resolveMergedCapybaraLetterAccountConfig(params.cfg, accountId);
+  const baseEnabled = params.cfg.channels?.["capybara-letter"]?.enabled !== false;
   const enabled = baseEnabled && merged.enabled !== false;
   const port = merged.port ?? DEFAULT_PORT;
   const host = merged.host?.trim() || DEFAULT_HOST;
@@ -55,4 +55,4 @@ export function resolveEduStoryAccount(params: {
 }
 
 export { DEFAULT_ACCOUNT_ID };
-export type { ResolvedEduStoryAccount } from "./types.js";
+export type { ResolvedCapybaraLetterAccount } from "./types.js";

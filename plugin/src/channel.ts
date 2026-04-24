@@ -5,39 +5,39 @@ import {
 import { getChatChannelMeta } from "openclaw/plugin-sdk/channel-plugin-common";
 import {
   DEFAULT_ACCOUNT_ID,
-  listEduStoryAccountIds,
-  resolveDefaultEduStoryAccountId,
-  resolveEduStoryAccount,
+  listCapybaraLetterAccountIds,
+  resolveDefaultCapybaraLetterAccountId,
+  resolveCapybaraLetterAccount,
 } from "./accounts.js";
-import { eduStoryPluginConfigSchema } from "./config-schema.js";
-import { startEduStoryGatewayAccount } from "./gateway.js";
-import { sendEduStoryText } from "./outbound.js";
+import { capybaraLetterPluginConfigSchema } from "./config-schema.js";
+import { startCapybaraLetterGatewayAccount } from "./gateway.js";
+import { sendCapybaraLetterText } from "./outbound.js";
 import type { ChannelPlugin } from "./runtime-api.js";
-import { eduStoryStatus } from "./status.js";
-import type { CoreConfig, ResolvedEduStoryAccount } from "./types.js";
+import { capybaraLetterStatus } from "./status.js";
+import type { CoreConfig, ResolvedCapybaraLetterAccount } from "./types.js";
 
-const CHANNEL_ID = "edu-story" as const;
+const CHANNEL_ID = "capybara-letter" as const;
 const meta = { ...getChatChannelMeta(CHANNEL_ID) };
 
-export const eduStoryPlugin: ChannelPlugin<ResolvedEduStoryAccount> = createChatChannelPlugin({
+export const capybaraLetterPlugin: ChannelPlugin<ResolvedCapybaraLetterAccount> = createChatChannelPlugin({
   base: {
     id: CHANNEL_ID,
     meta,
     capabilities: {
       chatTypes: ["direct"],
     },
-    reload: { configPrefixes: ["channels.edu-story"] },
-    configSchema: eduStoryPluginConfigSchema,
+    reload: { configPrefixes: ["channels.capybara-letter"] },
+    configSchema: capybaraLetterPluginConfigSchema,
     config: {
-      listAccountIds: (cfg) => listEduStoryAccountIds(cfg as CoreConfig),
+      listAccountIds: (cfg) => listCapybaraLetterAccountIds(cfg as CoreConfig),
       resolveAccount: (cfg, accountId) =>
-        resolveEduStoryAccount({ cfg: cfg as CoreConfig, accountId }),
-      defaultAccountId: (cfg) => resolveDefaultEduStoryAccountId(cfg as CoreConfig),
+        resolveCapybaraLetterAccount({ cfg: cfg as CoreConfig, accountId }),
+      defaultAccountId: (cfg) => resolveDefaultCapybaraLetterAccountId(cfg as CoreConfig),
       isConfigured: (account) => account.configured,
       resolveAllowFrom: ({ cfg, accountId }) =>
-        resolveEduStoryAccount({ cfg: cfg as CoreConfig, accountId }).config.allowFrom,
+        resolveCapybaraLetterAccount({ cfg: cfg as CoreConfig, accountId }).config.allowFrom,
       resolveDefaultTo: ({ cfg, accountId }) =>
-        resolveEduStoryAccount({ cfg: cfg as CoreConfig, accountId }).config.defaultTo ?? undefined,
+        resolveCapybaraLetterAccount({ cfg: cfg as CoreConfig, accountId }).config.defaultTo ?? undefined,
     },
     messaging: {
       normalizeTarget: (raw) => raw.trim().toLowerCase(),
@@ -58,15 +58,15 @@ export const eduStoryPlugin: ChannelPlugin<ResolvedEduStoryAccount> = createChat
           accountId,
           peer: { kind: "direct", id: target },
           chatType: "direct",
-          from: `edu-story:${accountId ?? DEFAULT_ACCOUNT_ID}`,
+          from: `capybara-letter:${accountId ?? DEFAULT_ACCOUNT_ID}`,
           to: target,
           threadId: threadId ?? undefined,
         }),
     },
-    status: eduStoryStatus,
+    status: capybaraLetterStatus,
     gateway: {
       startAccount: async (ctx) => {
-        await startEduStoryGatewayAccount(CHANNEL_ID, meta.label, ctx);
+        await startCapybaraLetterGatewayAccount(CHANNEL_ID, meta.label, ctx);
       },
     },
   },
@@ -77,7 +77,7 @@ export const eduStoryPlugin: ChannelPlugin<ResolvedEduStoryAccount> = createChat
     attachedResults: {
       channel: CHANNEL_ID,
       sendText: async ({ cfg, to, text, accountId }) =>
-        sendEduStoryText({
+        sendCapybaraLetterText({
           cfg: cfg as CoreConfig,
           accountId,
           to,

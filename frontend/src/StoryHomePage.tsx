@@ -1,24 +1,42 @@
-import type {
-  StorySessionSnapshot,
-  StoryWordCard,
-  StoryWordRating,
+import {
+  DEFAULT_STORY_EXPERIENCE_SETTINGS,
+  DEFAULT_STORY_RUNTIME_CONFIG,
+  type ConversationEntry,
+  type StoryDeliveryRecord,
+  type StorySessionSnapshot,
+  type StoryWordCard,
+  type StoryWordRating,
+  type VocabularyCard,
 } from "@capybara-letter/shared";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PixelStoryStage } from "./PixelStoryStage";
+import { LetterBody } from "./LetterBody";
+import { buildTimelineMockSession, resolveMockTimelineOptions } from "./mockTimeline";
+import { ParentPage } from "./ParentPage";
+import { ReviewPage } from "./ReviewPage";
+import { StoryScenePanel } from "./StoryScenePanel";
+import { TestConfigPage } from "./TestConfigPage";
 import {
-  AGE_OPTIONS,
   buildAdventurePreview,
   buildEnglishLevelPayload,
   DEFAULT_ENGLISH_LEVEL_ID,
-  ENGLISH_LEVEL_OPTIONS,
   IDLE_LETTER,
   IDLE_SCENE,
   IDLE_TIMELINE,
+  LEGACY_SESSION_CACHE_STORAGE_KEYS,
+  LEGACY_SESSION_ID_STORAGE_KEYS,
+  LEGACY_SETTINGS_STORAGE_KEYS,
   SESSION_CACHE_STORAGE_KEY,
   SESSION_ID_STORAGE_KEY,
   SETTINGS_STORAGE_KEY,
-  getEnglishLevelOption,
+  resolveEnglishLevelOptionId,
 } from "./story-presets";
+import {
+  findLatestAvailableDelivery,
+  formatRelativeMomentLabel,
+  isSameLocalDay,
+  resolveSessionNow,
+  toLocalDateKey,
+} from "./story-time";
 import { useCapybaraChannel } from "./useCapybaraChannel";
 
 type SettingsState = {
@@ -59,7 +77,10 @@ declare global {
   }
 }
 
-const WS_URL = import.meta.env.VITE_EDU_STORY_WS_URL ?? "ws://127.0.0.1:18820";
+const WS_URL =
+  import.meta.env.VITE_CAPYBARA_LETTER_WS_URL ??
+  import.meta.env.VITE_EDU_STORY_WS_URL ??
+  "ws://127.0.0.1:18820";
 
 const DEV_BACKEND_HINT = [
   "本地开发时，请先启动 OpenClaw gateway：",
@@ -67,14 +88,27 @@ const DEV_BACKEND_HINT = [
   "2. pnpm --filter @capybara-letter/frontend dev",
 ].join("\n");
 
-function readStoredJson<T>(key: string, fallback: T): T {
+function readStoredJson<T>(key: string, fallback: T, legacyKeys: string[] = []): T {
   if (typeof window === "undefined") {
     return fallback;
   }
 
   try {
     const raw = window.localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
+    if (raw) {
+      return JSON.parse(raw) as T;
+    }
+
+    for (const legacyKey of legacyKeys) {
+      const legacyRaw = window.localStorage.getItem(legacyKey);
+      if (!legacyRaw) {
+        continue;
+      }
+      window.localStorage.setItem(key, legacyRaw);
+      return JSON.parse(legacyRaw) as T;
+    }
+
+    return fallback;
   } catch {
     return fallback;
   }
@@ -91,6 +125,58 @@ function formatTime(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+function formatHistoryDateLabel(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat("zh-CN", {
+      month: "long",
+      day: "numeric",
+      weekday: "short",
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
+function historyDateKey(iso: string): string {
+  try {
+    const date = new Date(iso);
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, "0");
+    const day = `${date.getDate()}`.padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  } catch {
+    return iso;
+  }
+}
+
+function groupHistoryByDate(entries: ConversationEntry[]) {
+  const grouped: Array<{
+    key: string;
+    label: string;
+    entries: ConversationEntry[];
+  }> = [];
+
+  const sortedEntries = [...entries].toSorted(
+    (left, right) => new Date(right.time).getTime() - new Date(left.time).getTime(),
+  );
+
+  for (const entry of sortedEntries) {
+    const key = historyDateKey(entry.time);
+    const lastGroup = grouped[grouped.length - 1];
+    if (lastGroup && lastGroup.key === key) {
+      lastGroup.entries.push(entry);
+      continue;
+    }
+    grouped.push({
+      key,
+      label: formatHistoryDateLabel(entry.time),
+      entries: [entry],
+    });
+  }
+
+  return grouped;
 }
 
 function formatDueText(iso: string): string {
@@ -116,6 +202,53 @@ function formatDueText(iso: string): string {
 
 function normalizeWordKey(word: string): string {
   return `word:${word.trim().toLowerCase().replace(/\s+/g, "-")}`;
+}
+
+function buildDisplayedWordCards(params: {
+  story: StorySessionSnapshot["currentStory"];
+  wordBank: StoryWordCard[];
+  deliveryId: string | null;
+}): StoryWordCard[] {
+  if (!params.story) {
+    return [];
+  }
+
+  const bank = new Map(params.wordBank.map((card) => [card.id, card]));
+
+  return params.story.vocabularyCards.map((card) => {
+    const cardId = normalizeWordKey(card.word);
+    const existing = bank.get(cardId);
+    return {
+      id: cardId,
+      word: card.word,
+      pronunciation: card.pronunciation,
+      meaningZh: card.meaningZh,
+      partOfSpeech: card.partOfSpeech,
+      tapHint: card.tapHint,
+      example: card.example,
+      exampleZh: card.exampleZh,
+      sourceSessionId: params.story?.sessionId ?? existing?.sourceSessionId ?? "capybara-letter",
+      sourceTitle: params.story?.title ?? existing?.sourceTitle ?? "卡皮巴拉的来信",
+      sourceDeliveryId:
+        params.deliveryId ?? existing?.sourceDeliveryId ?? undefined,
+      encounterCount: existing?.encounterCount ?? 1,
+      firstSeenAt: existing?.firstSeenAt ?? new Date().toISOString(),
+      lastSeenAt: existing?.lastSeenAt ?? new Date().toISOString(),
+      lastRating: existing?.lastRating ?? null,
+      scheduler: existing?.scheduler ?? {
+        due: new Date().toISOString(),
+        stability: 0,
+        difficulty: 0,
+        elapsedDays: 0,
+        scheduledDays: 0,
+        learningSteps: 0,
+        reps: 0,
+        lapses: 0,
+        state: "New",
+        lastReview: null,
+      },
+    };
+  });
 }
 
 function iconButtonClass(active = false): string {
@@ -146,22 +279,6 @@ function HistoryIcon() {
       <path d="M3 12a9 9 0 1 0 3-6.7" />
       <path d="M3 4v5h5" />
       <path d="M12 7v5l3 2" />
-    </svg>
-  );
-}
-
-function SettingsIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      className="h-5 w-5"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path d="M12 3l1.7 2.7 3.1.7-.8 3 2 2-2 2 .8 3-3.1.7L12 21l-1.7-2.7-3.1-.7.8-3-2-2 2-2-.8-3 3.1-.7L12 3Z" />
-      <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }
@@ -228,7 +345,6 @@ function Drawer({ open, title, onClose, children }: DrawerProps) {
 type WordDockProps = {
   cards: StoryWordCard[];
   activeIndex: number;
-  setActiveIndex: (index: number) => void;
   onReview: (rating: StoryWordRating) => void;
   reviewing: boolean;
   totalBankCount: number;
@@ -237,7 +353,6 @@ type WordDockProps = {
 function WordDock({
   cards,
   activeIndex,
-  setActiveIndex,
   onReview,
   reviewing,
   totalBankCount,
@@ -249,13 +364,11 @@ function WordDock({
   }
 
   return (
-    <aside className="absolute right-3 top-[5.5rem] z-20 w-[min(90vw,18rem)] sm:right-5 sm:top-28">
+    <aside className="absolute right-3 bottom-28 z-20 w-[min(88vw,18rem)] sm:right-5 sm:bottom-32">
       <section className="rounded-[1.8rem] border-4 border-stone-900 bg-[#fff8ea]/90 p-4 shadow-[8px_8px_0_0_#2b2118] backdrop-blur-md">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-[10px] font-black uppercase tracking-[0.24em] text-stone-500">
-              Word Cards
-            </div>
+            <div className="text-[10px] font-black uppercase tracking-[0.24em] text-stone-500">Word Cards</div>
             <div className="mt-1 text-sm font-semibold text-stone-700">
               本次来信 {cards.length} 张卡，已累计 {totalBankCount} 个单词
             </div>
@@ -319,21 +432,8 @@ function WordDock({
         </div>
 
         {cards.length > 1 ? (
-          <div className="mt-3 flex gap-2">
-            <button
-              className="flex-1 rounded-full border-4 border-stone-900 bg-[#fffdf6] px-3 py-2 text-sm font-black shadow-[3px_3px_0_0_#2b2118]"
-              onClick={() => setActiveIndex((activeIndex - 1 + cards.length) % cards.length)}
-              type="button"
-            >
-              上一张
-            </button>
-            <button
-              className="flex-1 rounded-full border-4 border-stone-900 bg-[#fffdf6] px-3 py-2 text-sm font-black shadow-[3px_3px_0_0_#2b2118]"
-              onClick={() => setActiveIndex((activeIndex + 1) % cards.length)}
-              type="button"
-            >
-              下一张
-            </button>
+          <div className="mt-3 text-xs font-semibold leading-6 text-stone-500">
+            选一个记忆程度后，会自动切到下一张词卡。
           </div>
         ) : null}
       </section>
@@ -341,18 +441,29 @@ function WordDock({
   );
 }
 
-export function StoryHomePage() {
+type StoryHomePageProps = {
+  initialView?: "home" | "review" | "parent" | "test";
+};
+
+export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
+  const mockOptions = useMemo(() => resolveMockTimelineOptions(), []);
+  const [currentView, setCurrentView] = useState<"home" | "review" | "parent" | "test">(initialView);
   const [settings, setSettings] = useState<SettingsState>(() =>
     readStoredJson(SETTINGS_STORAGE_KEY, {
       age: 8,
       englishLevelId: DEFAULT_ENGLISH_LEVEL_ID,
-    }),
+    }, LEGACY_SETTINGS_STORAGE_KEYS),
   );
   const [session, setSession] = useState<StorySessionSnapshot | null>(() =>
-    readStoredJson<StorySessionSnapshot | null>(SESSION_CACHE_STORAGE_KEY, null),
+    readStoredJson<StorySessionSnapshot | null>(
+      SESSION_CACHE_STORAGE_KEY,
+      null,
+      LEGACY_SESSION_CACHE_STORAGE_KEYS,
+    ),
   );
   const [sessionId, setSessionId] = useState<string | null>(() =>
-    readStoredJson<string | null>(SESSION_ID_STORAGE_KEY, null),
+    mockOptions.sessionId ??
+      readStoredJson<string | null>(SESSION_ID_STORAGE_KEY, null, LEGACY_SESSION_ID_STORAGE_KEYS),
   );
   const [form, setForm] = useState({
     message: "",
@@ -362,17 +473,13 @@ export function StoryHomePage() {
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [letterOpen, setLetterOpen] = useState(false);
+  const [selectedDeliveryId, setSelectedDeliveryId] = useState<string | null>(null);
   const [voiceListening, setVoiceListening] = useState(false);
   const [pendingJourney, setPendingJourney] = useState<PendingJourneyState | null>(null);
-  const [bubbleAnchor, setBubbleAnchor] = useState({
-    x: 260,
-    y: 360,
-  });
   const [activeWordIndex, setActiveWordIndex] = useState(0);
+  const [streamPreview, setStreamPreview] = useState("");
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
-  const requestIdRef = useRef<string | null>(null);
   const phaseTimeoutsRef = useRef<number[]>([]);
 
   useEffect(() => {
@@ -427,13 +534,21 @@ export function StoryHomePage() {
     startTransition(() => {
       setSession(snapshot);
       setSessionId(snapshot.sessionId);
-      setLetterOpen(true);
+      setLetterOpen(
+        (current) =>
+          current &&
+          (Boolean(snapshot.currentStory) || (snapshot.deliveryLog?.length ?? 0) > 0),
+      );
       setLoading(false);
+      setReviewingWord(false);
+      setStreamPreview("");
+      setError(null);
+      resetJourney();
     });
   }, []);
 
-  const handleChannelDelta = useCallback((_text: string) => {
-    // streaming partial — could show typing indicator
+  const handleChannelDelta = useCallback((text: string) => {
+    setStreamPreview((current) => `${current}${text}`);
   }, []);
 
   const handleChannelStatus = useCallback((state: "thinking" | "researching" | "composing" | "idle") => {
@@ -445,10 +560,12 @@ export function StoryHomePage() {
   const handleChannelError = useCallback((message: string) => {
     setError(message);
     setLoading(false);
+    setReviewingWord(false);
     resetJourney();
   }, []);
 
-  const { connectionState, sendMessage, sendReviewWord } = useCapybaraChannel({
+  const { connectionState, send, sendMessage, sendReviewWord } = useCapybaraChannel({
+    enabled: !mockOptions.forceMock,
     url: WS_URL,
     age: settings.age,
     englishLevel: buildEnglishLevelPayload(settings.englishLevelId),
@@ -460,69 +577,137 @@ export function StoryHomePage() {
     onError: handleChannelError,
   });
 
-  const bootstrapping = connectionState === "connecting";
-
-  const latestCapybaraMessage = useMemo(() => {
-    if (loading && pendingJourney) {
-      return "...";
-    }
-    return (
-      [...(session?.history ?? [])].toReversed().find((entry) => entry.role === "capybara")?.text ??
-      session?.currentStory?.messages.findLast((message) => message.speaker === "capybara")?.text ??
-      IDLE_TIMELINE.tonightQuestion
-    );
-  }, [loading, pendingJourney, session]);
-
-  const latestUserMessage = useMemo(
-    () => [...(session?.history ?? [])].toReversed().find((entry) => entry.role === "user") ?? null,
-    [session],
+  const bootstrapping = !mockOptions.forceMock && connectionState === "connecting";
+  const timelineMockSession = useMemo(
+    () => buildTimelineMockSession(mockOptions.mockAt ?? undefined, mockOptions.sessionId ?? undefined),
+    [mockOptions.mockAt, mockOptions.sessionId],
+  );
+  const usingMockFallback = mockOptions.forceMock;
+  const displaySession = usingMockFallback ? timelineMockSession : session;
+  const sessionPreferences =
+    displaySession?.preferences ?? DEFAULT_STORY_EXPERIENCE_SETTINGS;
+  const sessionRuntime = displaySession?.runtime ?? DEFAULT_STORY_RUNTIME_CONFIG;
+  const effectiveNow = useMemo(() => resolveSessionNow(sessionRuntime), [sessionRuntime]);
+  const deliveryLog = useMemo(
+    () =>
+      [...(displaySession?.deliveryLog ?? [])].sort(
+        (left, right) =>
+          new Date(right.deliveredAt).getTime() - new Date(left.deliveredAt).getTime(),
+      ),
+    [displaySession?.deliveryLog],
   );
 
-  const selectedEnglishLevel = getEnglishLevelOption(settings.englishLevelId);
+  useEffect(() => {
+    if (!selectedDeliveryId) {
+      return;
+    }
+    if (!deliveryLog.some((entry) => entry.id === selectedDeliveryId)) {
+      setSelectedDeliveryId(null);
+    }
+  }, [deliveryLog, selectedDeliveryId]);
+
+  const selectedDelivery = useMemo(
+    () => deliveryLog.find((entry) => entry.id === selectedDeliveryId) ?? null,
+    [deliveryLog, selectedDeliveryId],
+  );
+  const latestAvailableDelivery = useMemo(
+    () => findLatestAvailableDelivery(displaySession?.deliveryLog ?? [], effectiveNow),
+    [displaySession?.deliveryLog, effectiveNow],
+  );
+  const waitingForTodayLetter = useMemo(() => {
+    if (selectedDelivery) {
+      return false;
+    }
+    if (!latestAvailableDelivery) {
+      return false;
+    }
+    if (latestAvailableDelivery.story.kind === "welcome") {
+      return false;
+    }
+    return !isSameLocalDay(latestAvailableDelivery.deliveredAt, effectiveNow);
+  }, [effectiveNow, latestAvailableDelivery, selectedDelivery]);
+
+  const activeDelivery = selectedDelivery ?? (waitingForTodayLetter ? null : latestAvailableDelivery);
+  const currentStory = activeDelivery?.story ?? null;
+  const latestUserMessage = useMemo(
+    () =>
+      [...(displaySession?.history ?? [])].toReversed().find((entry) => entry.role === "user") ??
+      null,
+    [displaySession],
+  );
   const activePreview = useMemo(
     () =>
       pendingJourney
         ? buildAdventurePreview({
             phase: pendingJourney.phase,
-            baseScene: session?.currentStory?.scene ?? null,
+            baseScene: currentStory?.scene ?? latestAvailableDelivery?.story.scene ?? null,
           })
         : null,
-    [pendingJourney, session],
+    [currentStory?.scene, latestAvailableDelivery?.story.scene, pendingJourney],
   );
 
-  const currentStory = session?.currentStory ?? null;
+  const latestCapybaraMessage = useMemo(() => {
+    if (loading && pendingJourney) {
+      return "...";
+    }
+    if (streamPreview.trim()) {
+      return streamPreview;
+    }
+    if (currentStory) {
+      return (
+        currentStory.messages.findLast((message) => message.speaker === "capybara")?.text ??
+        IDLE_TIMELINE.tonightQuestion
+      );
+    }
+    return `今天的信会在 ${sessionPreferences.deliveryTime} 送到。现在可以先去历史会话看看以前的来信。`;
+  }, [
+    currentStory,
+    displaySession,
+    loading,
+    pendingJourney,
+    sessionPreferences.deliveryTime,
+    streamPreview,
+  ]);
+
   const displayScene = activePreview?.scene ?? currentStory?.scene ?? IDLE_SCENE;
   const displayStatus = pendingJourney
     ? "正在冒险"
-    : session?.status === "adventuring"
+    : displaySession?.status === "adventuring"
       ? "正在冒险"
-      : loading
-        ? "正在回信"
-        : "等你许愿";
-  const displaySubtitle =
-    currentStory?.subtitle ?? "每天晚上许愿，第二天早晨收到一封会继续成长的信。";
+      : "正在回信";
+  const displaySubtitle = currentStory
+    ? currentStory.subtitle
+    : `今天的信会在 ${sessionPreferences.deliveryTime} 送到。还没到点时，可以去历史会话翻看以前的来信。`;
 
-  const currentWordCards = useMemo(() => {
-    if (!currentStory) {
-      return [];
-    }
-    const wordBank = new Map(session?.wordBank.map((card) => [card.id, card]));
-    return currentStory.vocabularyCards
-      .map((card) => wordBank.get(normalizeWordKey(card.word)))
-      .filter((card): card is StoryWordCard => Boolean(card));
-  }, [currentStory, session]);
+  const currentWordCards = useMemo(
+    () =>
+      buildDisplayedWordCards({
+        story: currentStory,
+        wordBank: displaySession?.wordBank ?? [],
+        deliveryId: activeDelivery?.id ?? null,
+      }),
+    [activeDelivery?.id, currentStory, displaySession?.wordBank],
+  );
+
+  const allWordCards = displaySession?.wordBank ?? [];
+  const historyGroups = useMemo(
+    () => groupHistoryByDate(displaySession?.history ?? []),
+    [displaySession?.history],
+  );
+  const deliveriesByDate = useMemo(() => {
+    const groups = new Map<string, StoryDeliveryRecord[]>();
+    deliveryLog.forEach((entry) => {
+      const key = toLocalDateKey(entry.deliveredAt);
+      const list = groups.get(key) ?? [];
+      list.push(entry);
+      groups.set(key, list);
+    });
+    return groups;
+  }, [deliveryLog]);
 
   useEffect(() => {
     setActiveWordIndex(0);
-  }, [currentStory?.sessionId, currentStory?.title]);
-
-  const stagePresentation = activePreview
-    ? {
-        phase: pendingJourney?.phase,
-      }
-    : {
-        phase: currentStory ? ("delivered" as const) : ("idle" as const),
-      };
+  }, [activeDelivery?.id, currentStory?.sessionId, currentStory?.title]);
 
   const updateJourney = (
     requestId: string,
@@ -560,6 +745,10 @@ export function StoryHomePage() {
   };
 
   const submit = () => {
+    if (mockOptions.forceMock) {
+      setHint("当前正在查看时间线 Mock Data。切回真实模式后，就能真的把愿望交给卡皮巴拉。");
+      return;
+    }
     const message = form.message.trim();
     if (!message || loading || bootstrapping) {
       return;
@@ -574,11 +763,12 @@ export function StoryHomePage() {
       time: new Date().toISOString(),
     };
 
-    requestIdRef.current = requestId;
     setLoading(true);
     setError(null);
     setHint(null);
+    setStreamPreview("");
     setForm({ message: "" });
+    setSelectedDeliveryId(null);
     setSessionId(nextSessionId);
     setSession((current) => ({
       sessionId: nextSessionId,
@@ -586,8 +776,11 @@ export function StoryHomePage() {
       updatedAt: optimisticEntry.time,
       status: "adventuring",
       currentStory: current?.currentStory ?? null,
+      deliveryLog: current?.deliveryLog ?? [],
       history: [...(current?.history ?? []), optimisticEntry],
       wordBank: current?.wordBank ?? [],
+      preferences: current?.preferences ?? DEFAULT_STORY_EXPERIENCE_SETTINGS,
+      runtime: current?.runtime ?? DEFAULT_STORY_RUNTIME_CONFIG,
     }));
     startJourney(requestId);
 
@@ -602,23 +795,37 @@ export function StoryHomePage() {
     }
   };
 
+  const submitWordReview = useCallback(
+    (cardId: string, rating: StoryWordRating) => {
+      if (!sessionId || reviewingWord) {
+        return false;
+      }
+
+      setReviewingWord(true);
+      const sent = sendReviewWord(cardId, rating);
+      if (!sent) {
+        setError("未连接到卡皮巴拉频道");
+        setReviewingWord(false);
+        return false;
+      }
+      return true;
+    },
+    [reviewingWord, sendReviewWord, sessionId],
+  );
+
   const handleReviewWord = (rating: StoryWordRating) => {
     const activeCard = currentWordCards[activeWordIndex];
-    if (!activeCard || !sessionId || reviewingWord) {
+    if (!activeCard) {
       return;
     }
 
-    setReviewingWord(true);
-    const sent = sendReviewWord(activeCard.id, rating);
+    const sent = submitWordReview(activeCard.id, rating);
     if (!sent) {
-      setError("未连接到卡皮巴拉频道");
-      setReviewingWord(false);
       return;
     }
     if (currentWordCards.length > 1) {
       setActiveWordIndex((current) => (current + 1) % currentWordCards.length);
     }
-    setReviewingWord(false);
   };
 
   const handleVoiceButton = () => {
@@ -662,37 +869,198 @@ export function StoryHomePage() {
     recognition.start();
   };
 
-  const bubbleStyle: React.CSSProperties = {
-    left: `clamp(1rem, calc(${bubbleAnchor.x}px - 9rem), calc(100vw - min(72vw, 22rem) - 1rem))`,
-    top: `clamp(5.5rem, calc(${bubbleAnchor.y}px - 18rem), calc(100dvh - 16rem))`,
-  };
+  const openDeliveryExperience = useCallback((deliveryId: string) => {
+    setSelectedDeliveryId(deliveryId);
+    setActiveWordIndex(0);
+    setLetterOpen(true);
+    setHistoryOpen(false);
+    setCurrentView("home");
+    window.history.pushState(null, "", "/");
+  }, []);
 
-  const letterStyle: React.CSSProperties = {
-    left: `clamp(1rem, calc(${bubbleAnchor.x}px - 12rem), calc(100vw - 25rem))`,
-    top: `clamp(5rem, calc(${bubbleAnchor.y}px - 18rem), 6rem)`,
-    maxWidth: "min(90vw, 26rem)",
-    maxHeight: "calc(100dvh - 12rem)",
-  };
+  if (currentView === "review") {
+    return (
+      <ReviewPage
+        wordBank={allWordCards}
+        onRate={(cardId, rating) => {
+          submitWordReview(cardId, rating);
+        }}
+        onBack={() => {
+          setCurrentView("home");
+          window.history.pushState(null, "", "/");
+        }}
+        onViewLetter={openDeliveryExperience}
+      />
+    );
+  }
+
+  if (currentView === "parent") {
+    return (
+      <ParentPage
+        learnerName={displaySession?.learnerProfile?.name ?? "小朋友"}
+        learnerAge={displaySession?.learnerProfile?.age ?? settings.age}
+        englishLevel={resolveEnglishLevelOptionId(
+          displaySession?.learnerProfile?.englishLevel ?? settings.englishLevelId,
+        )}
+        interests={displaySession?.learnerProfile?.interests ?? []}
+        parentNote={displaySession?.environment?.parentNote ?? ""}
+        deliveryTime={sessionPreferences.deliveryTime}
+        wordBankSize={allWordCards.length}
+        streakDays={displaySession?.history?.length ?? 0}
+        onSaveProfile={(profile) => {
+          setSettings({
+            age: profile.age,
+            englishLevelId: profile.englishLevel,
+          });
+          send({
+            type: "update-profile",
+            profile: {
+              ...profile,
+              englishLevel: buildEnglishLevelPayload(profile.englishLevel),
+            },
+          });
+        }}
+        onSavePreferences={(preferences) => {
+          send({ type: "update-preferences", preferences });
+        }}
+        onSaveNote={(note) => {
+          send({ type: "update-environment", environment: { parentNote: note } });
+        }}
+        onBack={() => {
+          setCurrentView("home");
+          window.history.pushState(null, "", "/");
+        }}
+      />
+    );
+  }
+
+  if (currentView === "test") {
+    return (
+      <TestConfigPage
+        deliveryTime={sessionPreferences.deliveryTime}
+        runtime={sessionRuntime}
+        onSaveRuntime={(runtime) => {
+          send({ type: "update-runtime", runtime });
+        }}
+        onBack={() => {
+          setCurrentView("home");
+          window.history.pushState(null, "", "/");
+        }}
+      />
+    );
+  }
+
+  const capybaraBubble = letterOpen ? (
+    <div className="flex max-h-[min(60vh,33rem)] flex-col rounded-[1.9rem] border-4 border-stone-900 bg-[#fffdf6]/96 p-4 shadow-[8px_8px_0_0_#2b2118] backdrop-blur-md sm:p-5">
+      <header className="mb-3 flex items-center justify-between gap-3">
+        <div className="inline-flex rounded-full border-[3px] border-stone-900 bg-[#ffefbf] px-3 py-1 text-xs font-black text-stone-700 shadow-[2px_2px_0_0_#2b2118]">
+          {currentStory?.title ?? "卡皮巴拉正在准备今天的来信"}
+        </div>
+        <button
+          aria-label="收起信件"
+          className="grid h-9 w-9 place-items-center rounded-full border-4 border-stone-900 bg-[#fffdf6] font-black shadow-[3px_3px_0_0_#2b2118]"
+          onClick={() => setLetterOpen(false)}
+          type="button"
+        >
+          ×
+        </button>
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+        {currentStory ? (
+          <>
+            <div className="text-lg font-black text-stone-900">
+              {currentStory.letter.greeting}
+            </div>
+            <LetterBody
+              paragraphs={currentStory.letter.body}
+              vocabularyCards={currentStory.vocabularyCards as VocabularyCard[] | undefined}
+              onWordTap={(word) => {
+                const idx = currentWordCards.findIndex(
+                  (c) => c.word.toLowerCase() === word.toLowerCase(),
+                );
+                if (idx >= 0) setActiveWordIndex(idx);
+              }}
+            />
+            <div className="mt-4 text-base font-semibold text-stone-800">
+              {currentStory.letter.signoff}
+            </div>
+            <div className="mt-2 text-sm leading-7 text-stone-600">
+              {currentStory.letter.postscript}
+            </div>
+          </>
+        ) : (
+          <section className="rounded-[1.4rem] border-4 border-stone-900 bg-[#fff8e8] p-4 shadow-[4px_4px_0_0_#2b2118]">
+            <div className="text-base font-black text-stone-900">
+              今天的信还没到
+            </div>
+            <div className="mt-3 space-y-3 text-sm leading-7 text-stone-700">
+              <p>卡皮巴拉会在每天 {sessionPreferences.deliveryTime} 左右把新信送到。</p>
+              <p>现在还没到今天的送信时间，所以首页先保持等待状态。</p>
+              <p>如果你想回看以前的信，可以去右上角的历史会话里点开对应日期。</p>
+            </div>
+          </section>
+        )}
+
+        {currentStory?.research ? (
+          <section className="mt-4 rounded-[1.4rem] border-4 border-stone-900 bg-[#fff8e8] p-4 shadow-[4px_4px_0_0_#2b2118]">
+            <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">真实线索</div>
+            <div className="mt-2 space-y-2 text-sm leading-7 text-stone-700">
+              <div className="font-semibold text-stone-800">{currentStory.research.title}</div>
+              <p>{currentStory.research.summary}</p>
+              <a
+                className="inline-flex rounded-full border-4 border-stone-900 bg-[#fffdf6] px-4 py-2 font-black text-stone-800 shadow-[3px_3px_0_0_#2b2118]"
+                href={currentStory.research.sourceUrl}
+                rel="noreferrer"
+                target="_blank"
+              >
+                查看来源 · {currentStory.research.sourceLabel}
+              </a>
+            </div>
+          </section>
+        ) : null}
+      </div>
+    </div>
+  ) : (
+    <button
+      className="block w-full text-left"
+      onClick={() => setLetterOpen(true)}
+      type="button"
+    >
+      <div className="relative rounded-[1.9rem] border-4 border-stone-900 bg-[#fffdf6]/94 px-4 py-4 text-sm leading-7 shadow-[8px_8px_0_0_#2b2118] backdrop-blur-md sm:px-5 sm:text-[1.02rem]">
+        {latestCapybaraMessage}
+        <div
+          className="absolute -bottom-4 h-0 w-0 -translate-x-1/2 border-l-[16px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-stone-900"
+          style={{ left: "var(--bubble-tail-x, 50%)" }}
+        />
+        <div
+          className="absolute -bottom-3 h-0 w-0 -translate-x-1/2 border-l-[12px] border-r-[9px] border-t-[16px] border-l-transparent border-r-transparent border-t-[#fffdf6]"
+          style={{ left: "var(--bubble-tail-x, 50%)" }}
+        />
+      </div>
+    </button>
+  );
 
   return (
     <main className="relative h-[100dvh] overflow-hidden bg-[#ead19d] text-stone-900">
-      <PixelStoryStage
-        className="h-[100dvh] w-full rounded-none"
-        onCapybaraAnchorChange={setBubbleAnchor}
-        presentation={stagePresentation}
+      <StoryScenePanel
+        bubble={capybaraBubble}
+        bubbleMode={letterOpen ? "letter" : "compact"}
+        className="h-[100dvh] w-full"
+        presentation={pendingJourney ? { phase: pendingJourney.phase } : undefined}
         scene={displayScene}
-        showcase={currentStory?.pixelShowcase ?? []}
       />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,249,229,0.3)_0%,rgba(255,249,229,0.04)_34%,transparent_58%),linear-gradient(180deg,rgba(255,244,220,0.18)_0%,rgba(255,244,220,0.02)_28%,rgba(25,19,15,0.08)_100%)]" />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-[linear-gradient(180deg,rgba(255,249,238,0.42)_0%,rgba(255,249,238,0)_100%)]" />
 
       <header className="absolute left-4 right-4 top-4 z-20 flex items-start justify-between gap-4 sm:left-6 sm:right-6 sm:top-6">
-        <section className="max-w-[min(62vw,25rem)] rounded-[1.7rem] border-4 border-stone-900/95 bg-[#fff8e6]/82 px-4 py-3 shadow-[8px_8px_0_0_#2b2118] backdrop-blur-md sm:px-5">
-          <div className="text-[10px] font-black uppercase tracking-[0.28em] text-stone-500">
-            Capybara&apos;s Letter
+        <section className="max-w-[min(56vw,20rem)] rounded-[1.55rem] border-4 border-stone-900/95 bg-[#fff8e6]/84 px-4 py-3 shadow-[8px_8px_0_0_#2b2118] backdrop-blur-md sm:px-5">
+          <div className="text-[10px] font-black uppercase tracking-[0.24em] text-stone-500">
+            Today's Letter
           </div>
-          <h1 className="mt-2 text-xl font-black leading-tight sm:text-[1.7rem]">卡皮巴拉的来信</h1>
-          <p className="mt-2 text-sm leading-6 text-stone-700 sm:text-base">{displaySubtitle}</p>
+          <h1 className="mt-1 text-xl font-black leading-tight sm:text-[1.65rem]">
+            卡皮巴拉的来信
+          </h1>
+          <p className="mt-1 text-sm leading-6 text-stone-700">{displaySubtitle}</p>
         </section>
 
         <div className="flex items-start gap-3">
@@ -708,105 +1076,39 @@ export function StoryHomePage() {
             <HistoryIcon />
           </button>
           <button
-            aria-label="设置"
-            className={iconButtonClass(settingsOpen)}
-            onClick={() => setSettingsOpen(true)}
+            aria-label="词卡复习"
+            className={iconButtonClass(false)}
+            onClick={() => {
+              setCurrentView("review");
+              window.history.pushState(null, "", "/review");
+            }}
             type="button"
           >
-            <SettingsIcon />
+            <span className="text-base">📝</span>
+          </button>
+          <button
+            aria-label="测试模式"
+            className={iconButtonClass(false)}
+            onClick={() => {
+              setCurrentView("test");
+              window.history.pushState(null, "", "/test");
+            }}
+            type="button"
+          >
+            <span className="text-base">🧪</span>
           </button>
         </div>
       </header>
 
-      <div
-        className={[
-          "absolute z-20 text-left transition-all duration-300 ease-out",
-          letterOpen ? "" : "max-w-[min(72vw,22rem)]",
-        ].join(" ")}
-        style={letterOpen ? letterStyle : bubbleStyle}
-      >
-        {letterOpen ? (
-          <div className="flex max-h-full flex-col rounded-[1.9rem] border-4 border-stone-900 bg-[#fffdf6]/96 p-5 shadow-[8px_8px_0_0_#2b2118] backdrop-blur-md">
-            <header className="mb-3 flex items-center justify-between">
-              <div className="inline-flex rounded-full border-[3px] border-stone-900 bg-[#ffefbf] px-3 py-1 text-xs font-black text-stone-700 shadow-[2px_2px_0_0_#2b2118]">
-                {currentStory?.title ?? "卡皮巴拉的来信"}
-              </div>
-              <button
-                aria-label="收起信件"
-                className="grid h-9 w-9 place-items-center rounded-full border-4 border-stone-900 bg-[#fffdf6] font-black shadow-[3px_3px_0_0_#2b2118]"
-                onClick={() => setLetterOpen(false)}
-                type="button"
-              >
-                ×
-              </button>
-            </header>
-            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-              <div className="text-lg font-black text-stone-900">
-                {currentStory?.letter.greeting ?? IDLE_LETTER.greeting}
-              </div>
-              <div className="mt-3 space-y-3 text-[0.95rem] leading-8 text-stone-700">
-                {(currentStory?.letter.body ?? IDLE_LETTER.body).map((paragraph, index) => (
-                  <p key={`${paragraph}-${index}`}>{paragraph}</p>
-                ))}
-              </div>
-              <div className="mt-4 text-base font-semibold text-stone-800">
-                {currentStory?.letter.signoff ?? IDLE_LETTER.signoff}
-              </div>
-              <div className="mt-2 text-sm leading-7 text-stone-600">
-                {currentStory?.letter.postscript ?? IDLE_LETTER.postscript}
-              </div>
-
-              <section className="mt-5 rounded-[1.4rem] border-4 border-stone-900 bg-[#fff8e8] p-4 shadow-[4px_4px_0_0_#2b2118]">
-                <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">来信节奏</div>
-                <div className="mt-2 space-y-2 text-sm leading-7 text-stone-700">
-                  <p>{currentStory?.timeline.tonightQuestion ?? IDLE_TIMELINE.tonightQuestion}</p>
-                  <p>{currentStory?.timeline.capybaraPromise ?? IDLE_TIMELINE.capybaraPromise}</p>
-                  <p>{currentStory?.timeline.morningDelivery ?? IDLE_TIMELINE.morningDelivery}</p>
-                </div>
-              </section>
-
-              {currentStory?.research ? (
-                <section className="mt-4 rounded-[1.4rem] border-4 border-stone-900 bg-[#fff8e8] p-4 shadow-[4px_4px_0_0_#2b2118]">
-                  <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">真实线索</div>
-                  <div className="mt-2 space-y-2 text-sm leading-7 text-stone-700">
-                    <div className="font-semibold text-stone-800">{currentStory.research.title}</div>
-                    <p>{currentStory.research.summary}</p>
-                    <a
-                      className="inline-flex rounded-full border-4 border-stone-900 bg-[#fffdf6] px-4 py-2 font-black text-stone-800 shadow-[3px_3px_0_0_#2b2118]"
-                      href={currentStory.research.sourceUrl}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      查看来源 · {currentStory.research.sourceLabel}
-                    </a>
-                  </div>
-                </section>
-              ) : null}
-            </div>
-          </div>
-        ) : (
-          <button
-            className="block w-full text-left"
-            onClick={() => setLetterOpen(true)}
-            type="button"
-          >
-            <div className="relative rounded-[1.9rem] border-4 border-stone-900 bg-[#fffdf6]/94 px-4 py-4 text-sm leading-7 shadow-[8px_8px_0_0_#2b2118] backdrop-blur-md sm:px-5 sm:text-[1.02rem]">
-              {latestCapybaraMessage}
-              <div className="absolute -bottom-4 left-16 h-0 w-0 border-l-[16px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-stone-900" />
-              <div className="absolute -bottom-3 left-[68px] h-0 w-0 border-l-[12px] border-r-[9px] border-t-[16px] border-l-transparent border-r-transparent border-t-[#fffdf6]" />
-            </div>
-          </button>
-        )}
-      </div>
-
-      <WordDock
-        activeIndex={activeWordIndex}
-        cards={currentWordCards}
-        onReview={handleReviewWord}
-        reviewing={reviewingWord}
-        setActiveIndex={setActiveWordIndex}
-        totalBankCount={session?.wordBank.length ?? 0}
-      />
+      {letterOpen ? (
+        <WordDock
+          activeIndex={activeWordIndex}
+          cards={currentWordCards}
+          onReview={handleReviewWord}
+          reviewing={reviewingWord}
+          totalBankCount={displaySession?.wordBank.length ?? 0}
+        />
+      ) : null}
 
       <section className="absolute inset-x-0 bottom-5 z-20 flex justify-center px-4 sm:bottom-6">
         <div className="w-full max-w-4xl">
@@ -814,7 +1116,7 @@ export function StoryHomePage() {
             <div className="mb-3 flex justify-center sm:justify-end">
               <div className="max-w-[min(84vw,24rem)] rounded-[1.7rem] border-4 border-stone-900 bg-[#ffe6a7]/94 px-4 py-3 text-sm leading-7 shadow-[6px_6px_0_0_#2b2118] backdrop-blur-sm">
                 <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">
-                  你刚刚说 · {formatTime(latestUserMessage.time)}
+                  {formatRelativeMomentLabel(latestUserMessage.time, effectiveNow)}
                 </div>
                 <div className="mt-1">{latestUserMessage.text}</div>
               </div>
@@ -875,116 +1177,87 @@ export function StoryHomePage() {
       </section>
 
       <Drawer onClose={() => setHistoryOpen(false)} open={historyOpen} title="历史会话">
-        {(session?.history.length ?? 0) === 0 ? (
+        {historyGroups.length === 0 ? (
           <div className="rounded-[1.5rem] border-4 border-dashed border-stone-900 bg-[#fffdf6] px-4 py-5 text-sm leading-7 text-stone-600">
-            这里会按时间顺序保留你和卡皮巴拉的完整会话。
+            这里会按日期轴保留你和卡皮巴拉的完整会话，最新记录会在最上面。
           </div>
         ) : (
-          <div className="space-y-3">
-            {session?.history.map((entry) => (
-              <article
-                key={entry.id}
-                className={`rounded-[1.5rem] border-4 border-stone-900 px-4 py-3 text-sm leading-7 shadow-[4px_4px_0_0_#2b2118] ${
-                  entry.role === "user"
-                    ? "bg-[#ffe8ad]"
-                    : entry.role === "capybara"
-                      ? "bg-[#fffdf6]"
-                      : "bg-[#f2ead8]"
-                }`}
-              >
-                <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">
-                  {entry.role === "user" ? "你" : entry.role === "capybara" ? "卡皮巴拉" : "旁白"} ·{" "}
-                  {formatTime(entry.time)}
+          <div className="space-y-5">
+            {historyGroups.map((group, index) => (
+              <section key={group.key} className="grid grid-cols-[6.6rem,1fr] gap-3">
+                <div className="flex flex-col items-center">
+                  <div className="rounded-[1.2rem] border-4 border-stone-900 bg-[#ffefbf] px-3 py-2 text-center text-xs font-black leading-5 text-stone-700 shadow-[3px_3px_0_0_#2b2118]">
+                    {group.label}
+                  </div>
+                  {index < historyGroups.length - 1 ? (
+                    <div className="mt-2 w-[5px] flex-1 rounded-full bg-stone-900/20" />
+                  ) : null}
                 </div>
-                <div className="mt-1">{entry.text}</div>
-              </article>
+
+                <div className="space-y-3">
+                  {(deliveriesByDate.get(group.key) ?? []).map((delivery) => (
+                    <button
+                      key={delivery.id}
+                      type="button"
+                      onClick={() => openDeliveryExperience(delivery.id)}
+                      className="block w-full rounded-[1.5rem] border-4 border-stone-900 bg-[#fff4c7] px-4 py-3 text-left shadow-[4px_4px_0_0_#2b2118] transition hover:bg-[#fff0b3]"
+                    >
+                      <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">
+                        来信 · {formatTime(delivery.deliveredAt)}
+                      </div>
+                      <div className="mt-1 text-base font-black text-stone-900">
+                        {delivery.story.title}
+                      </div>
+                      <div className="mt-1 text-sm leading-7 text-stone-700">
+                        点开这封信，回看当时卡皮巴拉真正寄回来的内容。
+                      </div>
+                    </button>
+                  ))}
+                  {group.entries.map((entry) => (
+                    <article
+                      key={entry.id}
+                      className={`rounded-[1.5rem] border-4 border-stone-900 px-4 py-3 text-sm leading-7 shadow-[4px_4px_0_0_#2b2118] ${
+                        entry.role === "user"
+                          ? "bg-[#ffe8ad]"
+                          : entry.role === "capybara"
+                            ? "bg-[#fffdf6]"
+                            : "bg-[#f2ead8]"
+                      }`}
+                    >
+                      {entry.role === "capybara" && entry.sourceDeliveryId ? (
+                        <button
+                          type="button"
+                          onClick={() => openDeliveryExperience(entry.sourceDeliveryId!)}
+                          className="block w-full text-left"
+                        >
+                          <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">
+                            卡皮巴拉 · {formatTime(entry.time)}
+                          </div>
+                          <div className="mt-1">{entry.text}</div>
+                          <div className="mt-2 text-xs font-black uppercase tracking-[0.14em] text-stone-500">
+                            点开重现这封信
+                          </div>
+                        </button>
+                      ) : (
+                        <>
+                          <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">
+                            {entry.role === "user"
+                              ? "你"
+                              : entry.role === "capybara"
+                                ? "卡皮巴拉"
+                                : "旁白"}{" "}
+                            · {formatTime(entry.time)}
+                          </div>
+                          <div className="mt-1">{entry.text}</div>
+                        </>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         )}
-      </Drawer>
-
-      <Drawer onClose={() => setSettingsOpen(false)} open={settingsOpen} title="设置">
-        <div className="space-y-5">
-          <section className="rounded-[1.5rem] border-4 border-stone-900 bg-[#fffdf6] p-4 shadow-[4px_4px_0_0_#2b2118]">
-            <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">
-              孩子信息
-            </div>
-            <div className="mt-4 grid gap-4">
-              <label className="grid gap-2 text-sm">
-                <span className="font-semibold text-stone-700">年龄</span>
-                <select
-                  className="rounded-[1rem] border-4 border-stone-900 bg-[#fff8e8] px-3 py-3"
-                  onChange={(event) =>
-                    setSettings((current) => ({
-                      ...current,
-                      age: Number.parseInt(event.target.value, 10),
-                    }))
-                  }
-                  value={String(settings.age)}
-                >
-                  {AGE_OPTIONS.map((age) => (
-                    <option key={age} value={age}>
-                      {age} 岁
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="grid gap-2 text-sm">
-                <span className="font-semibold text-stone-700">英语等级</span>
-                <select
-                  className="rounded-[1rem] border-4 border-stone-900 bg-[#fff8e8] px-3 py-3"
-                  onChange={(event) =>
-                    setSettings((current) => ({
-                      ...current,
-                      englishLevelId: event.target.value,
-                    }))
-                  }
-                  value={settings.englishLevelId}
-                >
-                  {ENGLISH_LEVEL_OPTIONS.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </section>
-
-          <section className="rounded-[1.5rem] border-4 border-stone-900 bg-[#fffdf6] p-4 shadow-[4px_4px_0_0_#2b2118]">
-            <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">
-              产品说明
-            </div>
-            <div className="mt-3 space-y-3 text-sm leading-7 text-stone-700">
-              <p>卡皮巴拉会在晚上接过孩子的愿望，第二天早晨寄回一封会带着真实线索的信。</p>
-              <p>欢迎信和每日来信里的英文，会自动进入右侧单词卡，并按间隔复习逻辑继续安排复现。</p>
-              <p>首页保持单线程体验，只保留像素场景、卡皮巴拉、最新一句话和输入框。</p>
-            </div>
-          </section>
-
-          <section className="rounded-[1.5rem] border-4 border-stone-900 bg-[#fffdf6] p-4 shadow-[4px_4px_0_0_#2b2118]">
-            <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">
-              等级标准
-            </div>
-            <div className="mt-3 space-y-3 text-sm leading-7 text-stone-700">
-              <p>这版默认采用 Pearson GSE 儿童框架，并保留 CEFR 对应关系，方便后续长期连续量化。</p>
-              <p>
-                当前选择：{selectedEnglishLevel.label}，对应 {selectedEnglishLevel.summary}
-              </p>
-            </div>
-          </section>
-
-          <section className="rounded-[1.5rem] border-4 border-stone-900 bg-[#fffdf6] p-4 shadow-[4px_4px_0_0_#2b2118]">
-            <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">
-              学习单词库
-            </div>
-            <div className="mt-3 text-sm leading-7 text-stone-700">
-              已累计 {session?.wordBank.length ?? 0}{" "}
-              个单词。后续可以继续扩展到儿童词库、四六级、考研、雅思、托福等不同词表层级。
-            </div>
-          </section>
-        </div>
       </Drawer>
 
       {(bootstrapping || loading) && !error ? (

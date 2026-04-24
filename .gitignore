@@ -5,3 +5,10 @@ dist/
 .env
 .env.*
 !.env.example
+plugin/agent/.openclaw/
+plugin/agent/IDENTITY.md
+plugin/agent/TOOLS.md
+plugin/agent/USER.md
+plugin/agent/auth-profiles.json
+plugin/agent/auth-state.json
+plugin/agent/models.json

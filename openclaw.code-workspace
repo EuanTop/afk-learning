@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "../openclaw"
+		},
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"typescript.reportStyleChecksAsWarnings": false,
+		"typescript.tsdk": "node_modules/typescript/lib"
+	}
+}

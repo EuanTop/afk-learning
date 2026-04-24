@@ -16,9 +16,14 @@ export type ClientFrame =
   | { type: "message"; text: string; meta?: { age?: number; englishLevel?: string } }
   | { type: "bootstrap"; age: number; englishLevel: string; sessionId?: string }
   | { type: "review-word"; cardId: string; rating: "again" | "hard" | "good" | "easy" }
+  | { type: "update-profile"; profile: { name: string; age: number; englishLevel: string; interests: string[] } }
+  | { type: "update-environment"; environment: { weather?: unknown; event?: string; parentNote?: string } }
+  | { type: "update-preferences"; preferences: { deliveryTime?: string } }
+  | { type: "update-runtime"; runtime: { mode?: "live" | "test"; simulatedNow?: string | null } }
   | { type: "ping" };
 
 type UseCapybaraChannelOptions = {
+  enabled?: boolean;
   url: string;
   age: number;
   englishLevel: string;
@@ -32,6 +37,7 @@ type UseCapybaraChannelOptions = {
 
 export function useCapybaraChannel(options: UseCapybaraChannelOptions) {
   const {
+    enabled = true,
     url,
     age,
     englishLevel,
@@ -46,27 +52,58 @@ export function useCapybaraChannel(options: UseCapybaraChannelOptions) {
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
+  const manuallyClosedRef = useRef(false);
+  const lastBootstrapSignatureRef = useRef<string | null>(null);
   const callbacksRef = useRef(options);
   callbacksRef.current = options;
+  const bootstrapRef = useRef({
+    age,
+    englishLevel,
+    sessionId,
+  });
+  bootstrapRef.current = {
+    age,
+    englishLevel,
+    sessionId,
+  };
+
+  const sendBootstrap = useCallback(() => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      return false;
+    }
+
+    const nextFrame: ClientFrame = {
+      type: "bootstrap",
+      age: bootstrapRef.current.age,
+      englishLevel: bootstrapRef.current.englishLevel,
+      sessionId: bootstrapRef.current.sessionId ?? undefined,
+    };
+    const signature = JSON.stringify(nextFrame);
+    if (signature === lastBootstrapSignatureRef.current) {
+      return true;
+    }
+
+    ws.send(signature);
+    lastBootstrapSignatureRef.current = signature;
+    return true;
+  }, []);
 
   const connect = useCallback(() => {
+    if (!enabled) {
+      return;
+    }
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       return;
     }
 
+    manuallyClosedRef.current = false;
     setConnectionState("connecting");
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
     ws.onopen = () => {
-      setConnectionState("connected");
-      const bootstrapFrame: ClientFrame = {
-        type: "bootstrap",
-        age,
-        englishLevel,
-        sessionId: sessionId ?? undefined,
-      };
-      ws.send(JSON.stringify(bootstrapFrame));
+      sendBootstrap();
     };
 
     ws.onmessage = (event) => {
@@ -79,6 +116,7 @@ export function useCapybaraChannel(options: UseCapybaraChannelOptions) {
 
       switch (frame.type) {
         case "connected":
+          setConnectionState("connected");
           callbacksRef.current.onSessionId(frame.sessionId);
           break;
         case "snapshot":
@@ -104,6 +142,10 @@ export function useCapybaraChannel(options: UseCapybaraChannelOptions) {
     ws.onclose = () => {
       setConnectionState("disconnected");
       wsRef.current = null;
+      lastBootstrapSignatureRef.current = null;
+      if (manuallyClosedRef.current) {
+        return;
+      }
       reconnectTimerRef.current = window.setTimeout(() => {
         connect();
       }, 3000);
@@ -112,17 +154,36 @@ export function useCapybaraChannel(options: UseCapybaraChannelOptions) {
     ws.onerror = () => {
       setConnectionState("error");
     };
-  }, [url, age, englishLevel, sessionId]);
+  }, [enabled, sendBootstrap, url]);
 
   useEffect(() => {
+    if (!enabled) {
+      manuallyClosedRef.current = true;
+      if (reconnectTimerRef.current !== null) {
+        window.clearTimeout(reconnectTimerRef.current);
+      }
+      wsRef.current?.close();
+      wsRef.current = null;
+      setConnectionState("disconnected");
+      return;
+    }
+
     connect();
     return () => {
+      manuallyClosedRef.current = true;
       if (reconnectTimerRef.current !== null) {
         window.clearTimeout(reconnectTimerRef.current);
       }
       wsRef.current?.close();
     };
-  }, [connect]);
+  }, [connect, enabled]);
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+    sendBootstrap();
+  }, [enabled, sendBootstrap, age, englishLevel, sessionId]);
 
   const send = useCallback((frame: ClientFrame) => {
     const ws = wsRef.current;

@@ -3,9 +3,11 @@ import {
   createComputedAccountStatusAdapter,
   createDefaultChannelRuntimeState,
 } from "./runtime-api.js";
-import type { ResolvedEduStoryAccount } from "./types.js";
+import type { ResolvedCapybaraLetterAccount } from "./types.js";
 
-export const eduStoryStatus = createComputedAccountStatusAdapter<ResolvedEduStoryAccount>({
+export const capybaraLetterStatus: ReturnType<
+  typeof createComputedAccountStatusAdapter<ResolvedCapybaraLetterAccount>
+> = createComputedAccountStatusAdapter<ResolvedCapybaraLetterAccount>({
   defaultRuntime: createDefaultChannelRuntimeState(DEFAULT_ACCOUNT_ID),
   buildChannelSummary: ({ snapshot }) => ({
     endpoint: `ws://127.0.0.1:${snapshot.port ?? 18820}`,

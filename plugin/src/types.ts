@@ -1,6 +1,13 @@
-import type { StorySessionSnapshot, StoryTurnResponse } from "@capybara-letter/shared";
+import type {
+  Environment,
+  StoryExperienceSettings,
+  StoryRuntimeConfig,
+  LearnerProfile,
+  StorySessionSnapshot,
+  StoryTurnResponse,
+} from "./shared/types.js";
 
-export type EduStoryAccountConfig = {
+export type CapybaraLetterAccountConfig = {
   name?: string;
   enabled?: boolean;
   port?: number;
@@ -10,21 +17,21 @@ export type EduStoryAccountConfig = {
   agentId?: string;
 };
 
-export type EduStoryConfig = EduStoryAccountConfig & {
-  accounts?: Record<string, Partial<EduStoryAccountConfig>>;
+export type CapybaraLetterConfig = CapybaraLetterAccountConfig & {
+  accounts?: Record<string, Partial<CapybaraLetterAccountConfig>>;
   defaultAccount?: string;
 };
 
 export type CoreConfig = {
   channels?: {
-    "edu-story"?: EduStoryConfig;
+    "capybara-letter"?: CapybaraLetterConfig;
   };
   session?: {
     store?: string;
   };
 };
 
-export type ResolvedEduStoryAccount = {
+export type ResolvedCapybaraLetterAccount = {
   accountId: string;
   enabled: boolean;
   configured: boolean;
@@ -32,7 +39,7 @@ export type ResolvedEduStoryAccount = {
   port: number;
   host: string;
   agentId: string;
-  config: EduStoryAccountConfig;
+  config: CapybaraLetterAccountConfig;
 };
 
 // Wire protocol: frontend ↔ channel WebSocket
@@ -40,6 +47,10 @@ export type ClientFrame =
   | { type: "message"; text: string; meta?: { age?: number; englishLevel?: string } }
   | { type: "bootstrap"; age: number; englishLevel: string; sessionId?: string }
   | { type: "review-word"; cardId: string; rating: "again" | "hard" | "good" | "easy" }
+  | { type: "update-profile"; profile: LearnerProfile }
+  | { type: "update-environment"; environment: Partial<Environment> }
+  | { type: "update-preferences"; preferences: Partial<StoryExperienceSettings> }
+  | { type: "update-runtime"; runtime: Partial<StoryRuntimeConfig> }
   | { type: "ping" };
 
 export type ServerFrame =

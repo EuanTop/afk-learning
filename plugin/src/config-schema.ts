@@ -1,7 +1,7 @@
 import { buildChannelConfigSchema } from "openclaw/plugin-sdk/channel-config-schema";
 import { z } from "openclaw/plugin-sdk/zod";
 
-export const EduStoryAccountConfigSchema = z
+export const CapybaraLetterAccountConfigSchema = z
   .object({
     name: z.string().optional(),
     enabled: z.boolean().optional(),
@@ -13,9 +13,10 @@ export const EduStoryAccountConfigSchema = z
   })
   .strict();
 
-export const EduStoryConfigSchema = EduStoryAccountConfigSchema.extend({
-  accounts: z.record(z.string(), EduStoryAccountConfigSchema.partial()).optional(),
+export const CapybaraLetterConfigSchema = CapybaraLetterAccountConfigSchema.extend({
+  accounts: z.record(z.string(), CapybaraLetterAccountConfigSchema.partial()).optional(),
   defaultAccount: z.string().optional(),
 }).strict();
 
-export const eduStoryPluginConfigSchema = buildChannelConfigSchema(EduStoryConfigSchema);
+export const capybaraLetterPluginConfigSchema: ReturnType<typeof buildChannelConfigSchema> =
+  buildChannelConfigSchema(CapybaraLetterConfigSchema);

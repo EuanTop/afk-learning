@@ -1,5 +1,4 @@
 import type {
-  PixelDemo,
   StoryLetter,
   StoryScene,
   StorySceneActorMotion,
@@ -587,7 +586,7 @@ function buildScene(phase: AdventurePhase): StoryScene {
       },
     ],
     prompt:
-      "lush pixel-art capybara mail dock by moonlit water, layered foliage, lantern glow, reflective pond, elegant storybook composition",
+      "storybook capybara mail dock by moonlit water, layered foliage, lantern glow, reflective pond, gentle story composition",
     motionCue:
       phase === "researching"
         ? "卡皮巴拉提灯走远，收信台只剩水光和灯影在轻轻晃。"
@@ -676,6 +675,27 @@ export function getEnglishLevelOption(id: string): EnglishLevelOption {
   );
 }
 
+export function resolveEnglishLevelOptionId(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return DEFAULT_ENGLISH_LEVEL_ID;
+  }
+
+  const exact = ENGLISH_LEVEL_OPTIONS.find((option) => option.id === trimmed);
+  if (exact) {
+    return exact.id;
+  }
+
+  const byRange = ENGLISH_LEVEL_OPTIONS.find(
+    (option) =>
+      trimmed.includes(option.gseRange) ||
+      trimmed.includes(option.label) ||
+      trimmed.includes(`CEFR ${option.cefr}`),
+  );
+
+  return byRange?.id ?? DEFAULT_ENGLISH_LEVEL_ID;
+}
+
 export function buildEnglishLevelPayload(id: string): string {
   const option = getEnglishLevelOption(id);
   return `${option.label}（CEFR ${option.cefr}，${option.summary}）`;
@@ -734,10 +754,6 @@ export function buildAdventurePreview(params: {
   }
 }
 
-export function filterHomeShowcase(showcase: PixelDemo[]): PixelDemo[] {
-  return showcase.filter((item) => item.id === "capybara");
-}
-
 export const IDLE_SCENE = buildAdventurePreview({
   phase: "idle",
 }).scene;
@@ -745,7 +761,7 @@ export const IDLE_SCENE = buildAdventurePreview({
 export const IDLE_TIMELINE: StoryTimeline = {
   tonightQuestion: "明天你想让卡皮巴拉寄回什么主题的信？",
   capybaraPromise: "今晚它会带着你的愿望出发，把真实线索收进小信封里。",
-  morningDelivery: "明天清晨，如果查找和生成都成功，它会把结果带回来。",
+  morningDelivery: "明晚 20:30 左右，如果查找和生成都成功，它会把结果带回来。",
 };
 
 export const IDLE_LETTER: StoryLetter = {
@@ -758,23 +774,10 @@ export const IDLE_LETTER: StoryLetter = {
   postscript: "P.S. 试试在下面的输入框里告诉我，你最想知道什么？",
 };
 
-export const IDLE_SHOWCASE: PixelDemo[] = [
-  {
-    id: "capybara",
-    label: "卡皮巴拉",
-    motion: "bob",
-    caption: "主角像素形象，负责送信、讲故事和陪伴学习。",
-    spritePrompt: "round capybara courier holding an envelope",
-  },
-  {
-    id: "running-human",
-    label: "跑步的人类",
-    motion: "run",
-    caption: "像素动作测试位，用于验证动态角色循环。",
-    spritePrompt: "tiny playful human running in a side-view loop",
-  },
-];
+export const SETTINGS_STORAGE_KEY = "capybara-letter-settings-v2";
+export const SESSION_ID_STORAGE_KEY = "capybara-letter-session-id-v4";
+export const SESSION_CACHE_STORAGE_KEY = "capybara-letter-session-cache-v4";
 
-export const SETTINGS_STORAGE_KEY = "edu-story-settings-v2";
-export const SESSION_ID_STORAGE_KEY = "edu-story-session-id-v3";
-export const SESSION_CACHE_STORAGE_KEY = "edu-story-session-cache-v3";
+export const LEGACY_SETTINGS_STORAGE_KEYS = ["edu-story-settings-v2"];
+export const LEGACY_SESSION_ID_STORAGE_KEYS = ["edu-story-session-id-v3"];
+export const LEGACY_SESSION_CACHE_STORAGE_KEYS = ["edu-story-session-cache-v3"];

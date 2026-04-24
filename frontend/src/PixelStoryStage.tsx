@@ -1,5 +1,4 @@
 import type {
-  PixelDemo,
   StoryScene,
   StorySceneActor,
   StorySceneActorMotion,
@@ -10,16 +9,13 @@ import Phaser from "phaser";
 import { useEffect, useRef } from "react";
 import type { AdventurePhase } from "./story-presets";
 
-type StagePresentation = {
-  phase?: AdventurePhase;
-};
-
 type PixelStoryStageProps = {
   scene: StoryScene;
-  showcase: PixelDemo[];
   className?: string;
   onCapybaraAnchorChange?: (anchor: { x: number; y: number }) => void;
-  presentation?: StagePresentation;
+  presentation?: {
+    phase?: AdventurePhase;
+  };
 };
 
 type AnimatedNode = {
@@ -100,7 +96,7 @@ const CAPYBARA_STILL_FRAMES = [
     ".oooo............oooo...........",
     "..oo............................",
   ],
-] as const;
+] as const satisfies PixelAnimationFrames;
 
 const CAPYBARA_LISTEN_FRAMES = [
   [
@@ -149,7 +145,7 @@ const CAPYBARA_LISTEN_FRAMES = [
     ".oooo............oooo...........",
     "..oo............................",
   ],
-] as const;
+] as const satisfies PixelAnimationFrames;
 
 const CAPYBARA_WALK_FRAMES = [
   [
@@ -198,7 +194,7 @@ const CAPYBARA_WALK_FRAMES = [
     "..oooo...........oooo...........",
     "...oo...........................",
   ],
-] as const;
+] as const satisfies PixelAnimationFrames;
 
 const CAPYBARA_BACK_FRAMES = [
   [
@@ -215,10 +211,10 @@ const CAPYBARA_BACK_FRAMES = [
     ".....obbbbbbbbbbbbbbbbbbbbbo....",
     ".....oobbbbbbbbbbbbbbbbbboo.....",
     "......oobbbboooooobbbbbooo......",
-    "......oobbo......oobboo........",
-    "......oobbo......oobboo........",
-    "......oobbo......oobboo........",
-    "......oooo........oooo.........",
+    "......oobbo......oobboo.........",
+    "......oobbo......oobboo.........",
+    "......oobbo......oobboo.........",
+    "......oooo........oooo..........",
   ],
   [
     "................................",
@@ -234,18 +230,12 @@ const CAPYBARA_BACK_FRAMES = [
     ".....obbbbbbbbbbbbbbbbbbbbbo....",
     ".....oobbbbbbbbbbbbbbbbbboo.....",
     "......oobbbboooooobbbbbooo......",
-    "......oobbo......oobboo........",
-    "......oobbo......oobboo........",
-    ".......obbo......obboo.........",
-    ".......oooo......oooo..........",
+    "......oobbo......oobboo.........",
+    "......oobbo......oobboo.........",
+    ".......obbo......obboo..........",
+    ".......oooo......oooo...........",
   ],
-] as const;
-
-const RUNNING_HUMAN_FRAMES = [
-  ["..hh..", "..hh..", "..ss..", ".ssss.", "..ss..", ".p..p.", "p....p", "..pp.."],
-  ["..hh..", "..hh..", "..ss..", ".ssss.", "..ss.p", ".p..p.", "p...p.", "...p.."],
-  ["..hh..", "..hh..", "..ss..", ".ssss.", "p.ss..", ".p..p.", ".p...p", "..p..."],
-] as const;
+] as const satisfies PixelAnimationFrames;
 
 function hexToNumber(hex: string): number {
   return Number.parseInt(hex.slice(1), 16);
@@ -280,15 +270,22 @@ function reverseRows(rows: readonly string[]): string[] {
   return rows.map((row) => row.split("").toReversed().join(""));
 }
 
+function measureFrame(rows: readonly string[]) {
+  return {
+    width: Math.max(...rows.map((row) => row.length), 1),
+    height: Math.max(rows.length, 1),
+  };
+}
+
 function createPixelContainer(
-  scene: Phaser.Scene,
+  sceneRuntime: Phaser.Scene,
   rows: readonly string[],
   symbols: readonly StoryScenePixelSymbol[],
   width: number,
   height: number,
   palette: Map<string, string>,
 ): Phaser.GameObjects.Container {
-  const container = scene.add.container(0, 0);
+  const container = sceneRuntime.add.container(0, 0);
   const symbolColors = new Map(
     symbols.map((entry) => [entry.symbol, resolveColor(entry.fill, palette, "#000000")]),
   );
@@ -305,7 +302,7 @@ function createPixelContainer(
         return;
       }
 
-      const pixel = scene.add
+      const pixel = sceneRuntime.add
         .rectangle(
           originX + columnIndex * pixelSize,
           originY + rowIndex * pixelSize,
@@ -361,8 +358,6 @@ function applyMotion(node: AnimatedNode, elapsed: number) {
     case "sway":
       node.target.x = node.baseX + Math.sin(phase * speed) * xAmplitude;
       node.target.rotation = Math.sin(phase * speed) * 0.06;
-      break;
-    default:
       break;
   }
 
@@ -473,44 +468,26 @@ function capybaraFramesForMotion(motion: StorySceneActorMotion): PixelAnimationF
   }
 }
 
-function humanSymbols(sceneSpec: StoryScene): StoryScenePixelSymbol[] {
-  const palette = resolvePalette(sceneSpec);
-  const paper = palette.get("paper") ?? "#FFF3D6";
-  const glow = palette.get("glow") ?? "#F2B15A";
-  const ink = palette.get("ink") ?? "#3D2D21";
-
-  return [
-    { symbol: "h", fill: paper },
-    { symbol: "s", fill: glow },
-    { symbol: "p", fill: ink },
-  ];
-}
-
-function capybaraAccessoryRows(motion: StorySceneActorMotion): {
-  rows: string[];
-  symbols: StoryScenePixelSymbol[];
-  offsetX: number;
-  offsetY: number;
-} | null {
+function capybaraAccessoryRows(motion: StorySceneActorMotion) {
   if (motion === "depart" || motion === "return" || motion === "search") {
     return {
       rows: [".mmm.", "mwwwm", ".mmm."],
       symbols: [
         { symbol: "m", fill: "#E4A355" },
         { symbol: "w", fill: "#8D6741" },
-      ],
+      ] satisfies StoryScenePixelSymbol[],
       offsetX: -8,
       offsetY: -34,
     };
   }
 
-  if (motion === "listen" || motion === "deliver" || motion === "still") {
+  if (motion === "listen" || motion === "deliver" || motion === "still" || motion === "bob") {
     return {
       rows: [".ppp.", "pmmmp", ".ppp."],
       symbols: [
         { symbol: "p", fill: "#FFF4DF" },
         { symbol: "m", fill: "#E4A355" },
-      ],
+      ] satisfies StoryScenePixelSymbol[],
       offsetX: 48,
       offsetY: -32,
     };
@@ -557,10 +534,7 @@ function createFramedActor(params: {
   };
 
   const update = (elapsed: number) => {
-    const isWalking =
-      params.baseMotion === "run" ||
-      params.baseMotion === "depart" ||
-      params.baseMotion === "return";
+    const isWalking = params.baseMotion === "depart" || params.baseMotion === "return";
     const nextFrameIndex =
       params.frames.length > 1 && isWalking ? Math.floor(elapsed / 7) % params.frames.length : 0;
 
@@ -593,11 +567,7 @@ function createFramedActor(params: {
       wrapper.y = baseY + Math.sin(elapsed / 20) * 4;
     }
 
-    if (
-      params.baseMotion === "run" ||
-      params.baseMotion === "depart" ||
-      params.baseMotion === "return"
-    ) {
+    if (params.baseMotion === "depart" || params.baseMotion === "return") {
       wrapper.y = baseY + Math.sin(elapsed / 10) * 8;
     }
   };
@@ -677,10 +647,7 @@ function createCapybaraActor(params: {
   };
 
   const update = (elapsed: number) => {
-    const isWalking =
-      params.baseMotion === "run" ||
-      params.baseMotion === "depart" ||
-      params.baseMotion === "return";
+    const isWalking = params.baseMotion === "depart" || params.baseMotion === "return";
     const nextFrameIndex =
       frames.length > 1 && isWalking
         ? Math.floor(elapsed / 7) % frames.length
@@ -750,17 +717,6 @@ function createActor(
   const palette = resolvePalette(sceneSpec);
   const effectiveMotion = motionForPhase(phase) ?? actor.motion;
 
-  if (actor.kind === "running-human") {
-    return createFramedActor({
-      sceneRuntime,
-      actor,
-      frames: RUNNING_HUMAN_FRAMES,
-      symbols: humanSymbols(sceneSpec),
-      palette,
-      baseMotion: effectiveMotion === "run" ? "run" : "bob",
-    });
-  }
-
   if (actor.kind === "pixel-art") {
     return createFramedActor({
       sceneRuntime,
@@ -780,44 +736,16 @@ function createActor(
   });
 }
 
-function buildSceneActors(
-  sceneRuntime: Phaser.Scene,
-  sceneSpec: StoryScene,
-  showcase: PixelDemo[],
-  presentation?: StagePresentation,
-) {
-  const actors = [...sceneSpec.actors];
-
-  if (
-    !presentation &&
-    showcase.some((item) => item.id === "running-human") &&
-    !actors.some((actor) => actor.kind === "running-human")
-  ) {
-    actors.push({
-      id: "lab-runner",
-      kind: "running-human",
-      x: 82,
-      y: 81,
-      size: 8,
-      facing: "right",
-      motion: "run",
-    });
-  }
-
-  return actors.map((actor) => createActor(sceneRuntime, sceneSpec, actor, presentation?.phase));
-}
-
 export function PixelStoryStage({
   scene,
-  showcase,
   className = "h-full w-full",
   onCapybaraAnchorChange,
   presentation,
 }: PixelStoryStageProps) {
+  const debugBubble = import.meta.env.DEV;
   const hostRef = useRef<HTMLDivElement | null>(null);
   const anchorCallbackRef = useRef(onCapybaraAnchorChange);
   const presentationPhase = presentation?.phase;
-  const showcaseKey = showcase.map((item) => `${item.id}:${item.motion}:${item.label}`).join("|");
   const sceneKey = JSON.stringify(scene);
 
   useEffect(() => {
@@ -830,6 +758,7 @@ export function PixelStoryStage({
     }
 
     hostRef.current.replaceChildren();
+    let lastAnchorDebugAt = 0;
 
     class StoryStageScene extends Phaser.Scene {
       private animatedNodes: AnimatedNode[] = [];
@@ -849,7 +778,9 @@ export function PixelStoryStage({
         this.cameras.main.setZoom(1.03);
         this.cameras.main.centerOn(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
         this.animatedNodes = drawSceneLayers(this, scene);
-        this.animatedActors = buildSceneActors(this, scene, showcase, presentationPhase ? { phase: presentationPhase } : undefined);
+        this.animatedActors = scene.actors.map((actor) =>
+          createActor(this, scene, actor, presentationPhase),
+        );
       }
 
       update(time: number) {
@@ -865,12 +796,13 @@ export function PixelStoryStage({
         }
 
         const capybara = this.animatedActors.find((actor) => actor.id === "capybara-main");
-        if (!capybara || !hostRef.current) {
+        const capybaraSpec = scene.actors.find((actor) => actor.id === "capybara-main");
+        if (!capybara || !capybaraSpec || !hostRef.current) {
           return;
         }
 
         const now = performance.now();
-        if (now - this.lastAnchorEmitAt < 120) {
+        if (now - this.lastAnchorEmitAt < 32) {
           return;
         }
 
@@ -878,27 +810,58 @@ export function PixelStoryStage({
         const view = camera.worldView;
         const hostWidth = hostRef.current.clientWidth;
         const hostHeight = hostRef.current.clientHeight;
+        const effectiveMotion = motionForPhase(presentationPhase) ?? capybaraSpec.motion;
+        const anchorFrame = capybaraFramesForMotion(effectiveMotion)[0] ?? CAPYBARA_STILL_FRAMES[0];
+        const frameBounds = measureFrame(anchorFrame);
+        const actorWidth = toStageWidth(capybaraSpec.size);
+        const actorHeight = actorWidth * (frameBounds.height / frameBounds.width);
+        const facingOffset =
+          capybaraSpec.facing === "left"
+            ? -actorWidth * 0.12
+            : capybaraSpec.facing === "right"
+              ? actorWidth * 0.12
+              : 0;
         const anchor = {
-          x: ((capybara.target.x - view.x) / view.width) * hostWidth,
-          y: ((capybara.target.y - view.y) / view.height) * hostHeight - 26,
+          x: ((capybara.target.x + facingOffset - view.x) / view.width) * hostWidth,
+          y: ((capybara.target.y - actorHeight - 24 - view.y) / view.height) * hostHeight,
         };
 
         const movedEnough =
           !this.lastAnchor ||
-          Math.abs(anchor.x - this.lastAnchor.x) > 3 ||
-          Math.abs(anchor.y - this.lastAnchor.y) > 3;
+          Math.abs(anchor.x - this.lastAnchor.x) > 0.75 ||
+          Math.abs(anchor.y - this.lastAnchor.y) > 0.75;
         if (!movedEnough) {
           return;
         }
 
         this.lastAnchor = anchor;
         this.lastAnchorEmitAt = now;
+        if (debugBubble && now - lastAnchorDebugAt >= 250) {
+          lastAnchorDebugAt = now;
+          console.debug("[PixelStoryStage] anchor-report", {
+            title: scene.title,
+            phase: presentationPhase ?? "idle",
+            anchor,
+            targetX: capybara.target.x,
+            targetY: capybara.target.y,
+            hostWidth,
+            hostHeight,
+            actorWidth,
+            actorHeight,
+            viewX: view.x,
+            viewY: view.y,
+            viewWidth: view.width,
+            viewHeight: view.height,
+            facing: capybaraSpec.facing,
+            facingOffset,
+          });
+        }
         reportAnchor(anchor);
       }
     }
 
     const game = new Phaser.Game({
-      type: Phaser.AUTO,
+      type: Phaser.CANVAS,
       parent: hostRef.current,
       width: CANVAS_WIDTH,
       height: CANVAS_HEIGHT,
@@ -921,6 +884,9 @@ export function PixelStoryStage({
         antialias: false,
         roundPixels: true,
       },
+      audio: {
+        noAudio: true,
+      },
     });
 
     const canvas = hostRef.current.querySelector("canvas");
@@ -928,12 +894,13 @@ export function PixelStoryStage({
       canvas.style.width = "100%";
       canvas.style.height = "100%";
       canvas.style.imageRendering = "pixelated";
+      canvas.style.display = "block";
     }
 
     return () => {
       game.destroy(true);
     };
-  }, [presentationPhase, sceneKey, showcaseKey]);
+  }, [debugBubble, presentationPhase, sceneKey]);
 
   return <div ref={hostRef} className={`overflow-hidden rounded-[2rem] ${className}`} />;
 }

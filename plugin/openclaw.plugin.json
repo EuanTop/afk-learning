@@ -1,6 +1,40 @@
 {
-  "id": "edu-story",
-  "channels": ["edu-story"],
+  "id": "capybara-letter",
+  "channels": ["capybara-letter"],
+  "channelConfigs": {
+    "capybara-letter": {
+      "label": "Capybara's Letter",
+      "description": "Bilingual educational channel: children make wishes, Capybara delivers letters.",
+      "schema": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "port": { "type": "number" },
+          "host": { "type": "string" },
+          "agentId": { "type": "string" },
+          "allowFrom": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "accounts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "port": { "type": "number" },
+                "host": { "type": "string" },
+                "agentId": { "type": "string" }
+              }
+            }
+          },
+          "defaultAccount": { "type": "string" }
+        }
+      }
+    }
+  },
   "configSchema": {
     "type": "object",
     "additionalProperties": true,

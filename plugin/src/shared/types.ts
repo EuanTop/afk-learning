@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+// Standalone copy of the product contract types so @capybara-letter/plugin
+// remains installable as a single OpenClaw plugin package.
 export const StoryTurnRequestSchema = z.object({
   message: z.string().trim().min(1),
   age: z.union([z.number().int().min(3).max(12), z.string().trim().min(1)]),
@@ -14,7 +16,7 @@ export type StoryMood = "warm" | "curious" | "excited" | "sleepy";
 export type StorySpeaker = "capybara" | "narrator";
 export type StoryDeliveryMode = "word-focus" | "letter-story";
 export type StoryKind = "welcome" | "lesson";
-export type StorySceneActorKind = "capybara" | "running-human" | "pixel-art";
+export type StorySceneActorKind = "capybara" | "pixel-art";
 export type StorySceneActorFacing = "left" | "right" | "front" | "back";
 export type StorySceneActorMotion =
   | "still"
@@ -24,7 +26,6 @@ export type StorySceneActorMotion =
   | "search"
   | "return"
   | "deliver"
-  | "run"
   | "drift";
 
 export type NormalizedStoryTurnRequest = {
@@ -139,22 +140,12 @@ export type StorySceneLayer = z.infer<typeof StorySceneLayerSchema>;
 export const StorySceneActorSchema = z
   .object({
     id: z.string().trim().min(1),
-    kind: z.enum(["capybara", "running-human", "pixel-art"]),
+    kind: z.enum(["capybara", "pixel-art"]),
     x: ScenePercentSchema,
     y: ScenePercentSchema,
     size: z.number().positive().max(60),
     facing: z.enum(["left", "right", "front", "back"]),
-    motion: z.enum([
-      "still",
-      "bob",
-      "listen",
-      "depart",
-      "search",
-      "return",
-      "deliver",
-      "run",
-      "drift",
-    ]),
+    motion: z.enum(["still", "bob", "listen", "depart", "search", "return", "deliver", "drift"]),
     alpha: SceneOpacitySchema.optional(),
     sprite: z.array(z.string().min(1)).min(1).max(48).optional(),
     symbols: z.array(StoryScenePixelSymbolSchema).min(1).max(16).optional(),
@@ -187,8 +178,8 @@ export const StorySceneSchema = z.object({
   title: z.string().min(1),
   mood: z.enum(["warm", "curious", "excited", "sleepy"]),
   palette: z.array(StorySceneColorSchema).min(1).max(24),
-  layers: z.array(StorySceneLayerSchema).min(1).max(16),
-  actors: z.array(StorySceneActorSchema).min(1).max(4),
+  layers: z.array(StorySceneLayerSchema).max(16).default([]),
+  actors: z.array(StorySceneActorSchema).max(4).default([]),
   prompt: z.string().min(1),
   motionCue: z.string().min(1),
 });
@@ -276,22 +267,12 @@ export type VocabularyCard = z.infer<typeof VocabularyCardSchema>;
 
 export const StoryLetterSchema = z.object({
   greeting: z.string().min(1),
-  body: z.array(z.string().min(1)).min(2).max(5),
+  body: z.array(z.string().min(1)).min(1).max(6),
   signoff: z.string().min(1),
   postscript: z.string().min(1),
 });
 
 export type StoryLetter = z.infer<typeof StoryLetterSchema>;
-
-export const PixelDemoSchema = z.object({
-  id: z.enum(["capybara", "running-human"]),
-  label: z.string().min(1),
-  motion: z.enum(["bob", "run"]),
-  caption: z.string().min(1),
-  spritePrompt: z.string().min(1),
-});
-
-export type PixelDemo = z.infer<typeof PixelDemoSchema>;
 
 export const StoryTurnDraftSchema = z.object({
   title: z.string().min(1),
@@ -303,9 +284,8 @@ export const StoryTurnDraftSchema = z.object({
   wordSpotlight: WordSpotlightSchema,
   vocabularyCards: z.array(VocabularyCardDraftSchema).min(2).max(8),
   letter: StoryLetterSchema,
-  messages: z.array(StoryMessageDraftSchema).min(2).max(6),
+  messages: z.array(StoryMessageDraftSchema).min(1).max(6),
   task: StoryTaskDraftSchema,
-  pixelShowcase: z.array(PixelDemoSchema).min(2).max(4),
   suggestedReply: z.string().min(1),
 });
 
@@ -327,9 +307,8 @@ export const StoryTurnResponseSchema = z.object({
   wordSpotlight: WordSpotlightSchema,
   vocabularyCards: z.array(VocabularyCardSchema).min(2).max(8),
   letter: StoryLetterSchema,
-  messages: z.array(StoryMessageSchema).min(2).max(6),
+  messages: z.array(StoryMessageSchema).min(1).max(6),
   task: StoryTaskSchema,
-  pixelShowcase: z.array(PixelDemoSchema).min(2).max(4),
   suggestedReply: z.string().min(1),
 });
 
@@ -340,6 +319,7 @@ export const ConversationEntrySchema = z.object({
   role: z.enum(["user", "capybara", "narrator"]),
   text: z.string().min(1),
   time: z.string().datetime(),
+  sourceDeliveryId: z.string().min(1).optional(),
 });
 
 export type ConversationEntry = z.infer<typeof ConversationEntrySchema>;
@@ -347,6 +327,61 @@ export type ConversationEntry = z.infer<typeof ConversationEntrySchema>;
 export const StorySessionStatusSchema = z.enum(["replying", "adventuring"]);
 
 export type StorySessionStatus = z.infer<typeof StorySessionStatusSchema>;
+
+export const DEFAULT_DELIVERY_TIME = "20:30" as const;
+const DeliveryTimeSchema = z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/);
+
+export const WeatherDataSchema = z.object({
+  condition: z.string().min(1),
+  tempHigh: z.number(),
+  tempLow: z.number(),
+  humidity: z.number().optional(),
+});
+
+export type WeatherData = z.infer<typeof WeatherDataSchema>;
+
+export const EnvironmentSchema = z.object({
+  weather: WeatherDataSchema.optional(),
+  event: z.string().optional(),
+  parentNote: z.string().optional(),
+});
+
+export type Environment = z.infer<typeof EnvironmentSchema>;
+
+export const LearnerProfileSchema = z.object({
+  name: z.string().min(1),
+  age: z.number().int().min(3).max(12),
+  englishLevel: z.string().min(1),
+  interests: z.array(z.string().min(1)),
+});
+
+export type LearnerProfile = z.infer<typeof LearnerProfileSchema>;
+
+export const StoryExperienceSettingsSchema = z.object({
+  deliveryTime: DeliveryTimeSchema.default(DEFAULT_DELIVERY_TIME),
+});
+
+export type StoryExperienceSettings = z.infer<typeof StoryExperienceSettingsSchema>;
+
+export const DEFAULT_STORY_EXPERIENCE_SETTINGS: StoryExperienceSettings = {
+  deliveryTime: DEFAULT_DELIVERY_TIME,
+};
+
+export const StoryRuntimeModeSchema = z.enum(["live", "test"]);
+
+export type StoryRuntimeMode = z.infer<typeof StoryRuntimeModeSchema>;
+
+export const StoryRuntimeConfigSchema = z.object({
+  mode: StoryRuntimeModeSchema.default("live"),
+  simulatedNow: z.string().datetime().nullable().default(null),
+});
+
+export type StoryRuntimeConfig = z.infer<typeof StoryRuntimeConfigSchema>;
+
+export const DEFAULT_STORY_RUNTIME_CONFIG: StoryRuntimeConfig = {
+  mode: "live",
+  simulatedNow: null,
+};
 
 export const StudyCardSchedulerStateSchema = z.enum(["New", "Learning", "Review", "Relearning"]);
 
@@ -374,6 +409,7 @@ export type StudyCardScheduler = z.infer<typeof StudyCardSchedulerSchema>;
 export const StoryWordCardSchema = VocabularyCardSchema.extend({
   sourceSessionId: z.string().min(1),
   sourceTitle: z.string().min(1),
+  sourceDeliveryId: z.string().min(1).optional(),
   encounterCount: z.number().int().min(1),
   firstSeenAt: z.string().datetime(),
   lastSeenAt: z.string().datetime(),
@@ -383,14 +419,27 @@ export const StoryWordCardSchema = VocabularyCardSchema.extend({
 
 export type StoryWordCard = z.infer<typeof StoryWordCardSchema>;
 
+export const StoryDeliveryRecordSchema = z.object({
+  id: z.string().min(1),
+  deliveredAt: z.string().datetime(),
+  story: StoryTurnResponseSchema,
+});
+
+export type StoryDeliveryRecord = z.infer<typeof StoryDeliveryRecordSchema>;
+
 export const StorySessionSnapshotSchema = z.object({
   sessionId: z.string().min(1),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   status: StorySessionStatusSchema,
   currentStory: StoryTurnResponseSchema.nullable(),
+  deliveryLog: z.array(StoryDeliveryRecordSchema).default([]),
   history: z.array(ConversationEntrySchema),
   wordBank: z.array(StoryWordCardSchema),
+  environment: EnvironmentSchema.optional(),
+  learnerProfile: LearnerProfileSchema.optional(),
+  preferences: StoryExperienceSettingsSchema.default(DEFAULT_STORY_EXPERIENCE_SETTINGS),
+  runtime: StoryRuntimeConfigSchema.default(DEFAULT_STORY_RUNTIME_CONFIG),
 });
 
 export type StorySessionSnapshot = z.infer<typeof StorySessionSnapshotSchema>;
