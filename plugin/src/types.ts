@@ -42,10 +42,24 @@ export type ResolvedCapybaraLetterAccount = {
   config: CapybaraLetterAccountConfig;
 };
 
+export type SpeechScope = "letter" | "word";
+
+export type SpeechFramePayload = {
+  requestId: string;
+  scope: SpeechScope;
+  text: string;
+  mimeType: "audio/mpeg";
+  audioBase64: string;
+  provider: "xfyun";
+  voice: string;
+  cacheKey: string;
+};
+
 // Wire protocol: frontend ↔ channel WebSocket
 export type ClientFrame =
   | { type: "message"; text: string; meta?: { age?: number; englishLevel?: string } }
   | { type: "bootstrap"; age: number; englishLevel: string; sessionId?: string }
+  | { type: "request-speech"; requestId: string; scope: SpeechScope; text: string }
   | { type: "review-word"; cardId: string; rating: "again" | "hard" | "good" | "easy" }
   | { type: "update-profile"; profile: LearnerProfile }
   | { type: "update-environment"; environment: Partial<Environment> }
@@ -58,6 +72,8 @@ export type ServerFrame =
   | { type: "snapshot"; payload: StorySessionSnapshot }
   | { type: "delta"; text: string }
   | { type: "error"; message: string }
+  | { type: "speech"; payload: SpeechFramePayload }
+  | { type: "speech-error"; requestId: string; message: string }
   | { type: "status"; state: "thinking" | "researching" | "composing" | "idle" }
   | { type: "connected"; sessionId: string }
   | { type: "pong" };

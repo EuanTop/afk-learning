@@ -68,11 +68,62 @@ capybara-letter channel 会在端口 `18820` 启动 WebSocket 服务器。
 ## 5. 启动前端
 
 ```bash
-cd ../frontend
+cd ..
 pnpm dev
 ```
 
 前端默认在 `http://localhost:5173` 启动，通过 WebSocket 连接 `ws://127.0.0.1:18820`。
+
+## 5.1 配置讯飞 TTS
+
+TTS 实现在 `@capybara-letter/plugin` 后端，不进入 OpenClaw core，也不直接把密钥发给浏览器。
+
+推荐方式是直接在 `capybara-letter` 根目录写 `.env`：
+
+```bash
+cd ..
+cp .env.example .env
+```
+
+然后填写：
+
+```dotenv
+CAPYBARA_TTS_XFYUN_APP_ID=你的_APP_ID
+CAPYBARA_TTS_XFYUN_API_KEY=你的_API_KEY
+CAPYBARA_TTS_XFYUN_API_SECRET=你的_API_SECRET
+```
+
+可选调节项：
+
+```dotenv
+CAPYBARA_TTS_XFYUN_VCN=x_lele
+CAPYBARA_TTS_XFYUN_SPEED=45
+CAPYBARA_TTS_XFYUN_VOLUME=65
+CAPYBARA_TTS_XFYUN_PITCH=50
+```
+
+插件会自动读取：
+
+1. `capybara-letter/.env`
+2. `capybara-letter/.env.local`
+3. `capybara-letter/plugin/.env`
+4. `capybara-letter/plugin/.env.local`
+
+如果你更喜欢 shell 环境变量，也可以继续 `export ...`，并且 shell 里的值优先级更高。
+
+然后重启：
+
+```bash
+openclaw gateway run --bind loopback --port 18789
+```
+
+当前前端支持：
+
+1. 展开信件后朗读整封信
+2. 词卡区域点读当前单词
+3. 点击信件正文中的高亮单词直接点读
+
+如果没有配置讯飞密钥，channel 会返回显式 `speech-error`，不会伪造音频。
 
 ## 6. 使用
 
@@ -136,3 +187,8 @@ plugin/
     ├── HEARTBEAT.md       # 定时任务（晨间送信）
     └── MEMORY.md          # 记忆索引
 ```
+
+## 开发注意
+
+- 改 `plugin/src/**` 后，需要重启 OpenClaw Gateway，`18820` 才会重新加载最新逻辑。
+- 如果插件是 `openclaw plugins install -l ./plugin` 的 link 安装，通常不需要重复安装插件，只需要重启 Gateway。

@@ -135,6 +135,49 @@ pnpm dev:frontend
 
 打开 http://localhost:5173，输入一个愿望，等待卡皮巴拉回信。
 
+### 6.1 配置讯飞 TTS（可选但推荐）
+
+TTS 只接在 `@capybara-letter/plugin` 后端，不放到 OpenClaw core，也不把密钥暴露给浏览器。
+
+第一次配置时：
+
+```bash
+cd capybara-letter
+cp .env.example .env
+```
+
+然后编辑 `.env`，填入真实讯飞密钥：
+
+```dotenv
+CAPYBARA_TTS_XFYUN_APP_ID=你的_APP_ID
+CAPYBARA_TTS_XFYUN_API_KEY=你的_API_KEY
+CAPYBARA_TTS_XFYUN_API_SECRET=你的_API_SECRET
+```
+
+可选调节项：
+
+```dotenv
+CAPYBARA_TTS_XFYUN_VCN=x_lele
+CAPYBARA_TTS_XFYUN_SPEED=45
+CAPYBARA_TTS_XFYUN_VOLUME=65
+CAPYBARA_TTS_XFYUN_PITCH=50
+```
+
+`@capybara-letter/plugin` 会自动按顺序读取：
+
+1. `capybara-letter/.env`
+2. `capybara-letter/.env.local`
+3. `capybara-letter/plugin/.env`
+4. `capybara-letter/plugin/.env.local`
+
+配完后重新启动 Gateway。前端就会自动支持：
+
+- 展开信件后的“朗读信件”
+- 词卡区域的“点读”
+- 点击信件正文中高亮英文词时直接点读
+
+如果没有配置讯飞密钥，前端会收到明确错误提示，而不会使用 fake audio。
+
 ### 7. 导入 Mock 会话到 OpenClaw + Snapshot
 
 ```bash
@@ -181,6 +224,13 @@ pnpm dev:frontend
 # 类型检查
 pnpm check
 ```
+
+### 开发时的重启规则
+
+- 改 `frontend/`：重新跑前端 dev server 或等待 Vite 热更新。
+- 改 `plugin/`：需要重启 OpenClaw Gateway，`18820` 才会加载到最新的 channel 逻辑。
+
+如果你已经用 link 方式安装了插件，通常不需要重新安装插件，只需要重启 Gateway。
 
 ## 与 OpenClaw 的关系
 

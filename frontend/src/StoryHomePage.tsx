@@ -37,7 +37,7 @@ import {
   resolveSessionNow,
   toLocalDateKey,
 } from "./story-time";
-import { useCapybaraChannel } from "./useCapybaraChannel";
+import { useCapybaraChannel, type SpeechFramePayload } from "./useCapybaraChannel";
 import type { StoryScene } from "@capybara-letter/shared";
 
 type SettingsState = {
@@ -54,6 +54,11 @@ type QuickWishOption = {
 type PendingJourneyState = {
   requestId: string;
   phase: "wish-heard" | "departing" | "researching" | "returning";
+};
+
+type PendingSpeechRequest = {
+  key: string;
+  scope: "letter" | "word";
 };
 
 type BrowserSpeechRecognitionEvent = {
@@ -426,6 +431,38 @@ function normalizeWishText(value: string): string {
   return `明天我想听${trimmed}。`;
 }
 
+function buildLetterSpeechText(story: NonNullable<StorySessionSnapshot["currentStory"]>): string {
+  return [
+    story.letter.greeting,
+    ...story.letter.body,
+    story.letter.signoff,
+    story.letter.postscript,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function buildWordSpeechText(card: StoryWordCard): string {
+  return card.word.trim();
+}
+
+function createAudioSourceUrl(mimeType: string, audioBase64: string): string {
+  const binary = window.atob(audioBase64.replace(/\s+/gu, ""));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  const blob = new Blob([bytes], { type: mimeType });
+  return URL.createObjectURL(blob);
+}
+
+function revokeAudioSourceUrl(src: string | null | undefined) {
+  if (!src?.startsWith("blob:")) {
+    return;
+  }
+  URL.revokeObjectURL(src);
+}
+
 function buildTomorrowWishOptions(params: {
   story: StorySessionSnapshot["currentStory"];
   environment: StorySessionSnapshot["environment"] | undefined;
@@ -596,6 +633,23 @@ function SendIcon() {
   );
 }
 
+function SpeakerIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-4 w-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M11 5 6 9H3v6h3l5 4z" />
+      <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+      <path d="M18.5 6a9 9 0 0 1 0 12" />
+    </svg>
+  );
+}
+
 type DrawerProps = {
   open: boolean;
   title: string;
@@ -633,7 +687,9 @@ type WordDockProps = {
   cards: StoryWordCard[];
   activeIndex: number;
   onReview: (rating: StoryWordRating) => void;
+  onSpeakWord: () => void;
   reviewing: boolean;
+  speechState: "idle" | "loading" | "playing";
   totalBankCount: number;
 };
 
@@ -641,7 +697,9 @@ function WordDock({
   cards,
   activeIndex,
   onReview,
+  onSpeakWord,
   reviewing,
+  speechState,
   totalBankCount,
 }: WordDockProps) {
   const activeCard = cards[activeIndex] ?? null;
@@ -666,9 +724,25 @@ function WordDock({
         </div>
 
         <article className="mt-4 rounded-[1.5rem] border-4 border-stone-900 bg-[#fffdf6] px-4 py-4 shadow-[4px_4px_0_0_#2b2118]">
-          <div className="text-2xl font-black text-stone-900">{activeCard.word}</div>
-          <div className="mt-1 text-sm font-semibold text-stone-500">
-            {activeCard.pronunciation}
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-2xl font-black text-stone-900">{activeCard.word}</div>
+              <div className="mt-1 text-sm font-semibold text-stone-500">
+                {activeCard.pronunciation}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onSpeakWord}
+              className="inline-flex items-center gap-2 rounded-full border-4 border-stone-900 bg-[#fff8e8] px-3 py-2 text-xs font-black text-stone-800 shadow-[3px_3px_0_0_#2b2118]"
+            >
+              <SpeakerIcon />
+              {speechState === "loading"
+                ? "朗读中..."
+                : speechState === "playing"
+                  ? "停止朗读"
+                  : "点读"}
+            </button>
           </div>
           <div className="mt-3 text-base font-semibold text-stone-800">{activeCard.meaningZh}</div>
           <div className="mt-1 text-xs uppercase tracking-[0.18em] text-stone-500">
@@ -765,8 +839,13 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
   const [pendingJourney, setPendingJourney] = useState<PendingJourneyState | null>(null);
   const [activeWordIndex, setActiveWordIndex] = useState(0);
   const [streamPreview, setStreamPreview] = useState("");
+  const [speechLoadingKey, setSpeechLoadingKey] = useState<string | null>(null);
+  const [speakingKey, setSpeakingKey] = useState<string | null>(null);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const phaseTimeoutsRef = useRef<number[]>([]);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const speechRequestsRef = useRef<Map<string, PendingSpeechRequest>>(new Map());
+  const speechSrcCacheRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -809,8 +888,61 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
     return () => {
       recognitionRef.current?.stop();
       clearJourneyTimers();
+      speechRequestsRef.current.clear();
+      speechSrcCacheRef.current.forEach((src) => {
+        revokeAudioSourceUrl(src);
+      });
+      speechSrcCacheRef.current.clear();
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+        audioRef.current = null;
+      }
     };
   }, []);
+
+  const stopSpeechPlayback = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setSpeakingKey(null);
+  }, []);
+
+  const playSpeechDataUrl = useCallback(
+    async (key: string, src: string) => {
+      if (!audioRef.current) {
+        audioRef.current = new Audio();
+        audioRef.current.preload = "auto";
+        audioRef.current.setAttribute("playsinline", "true");
+      }
+
+      const audio = audioRef.current;
+      audio.pause();
+      audio.currentTime = 0;
+      audio.src = src;
+      audio.onended = () => {
+        setSpeakingKey((current) => (current === key ? null : current));
+      };
+      audio.onerror = () => {
+        setSpeakingKey((current) => (current === key ? null : current));
+        setHint("这次朗读没有成功播放，我们可以再点一次试试。");
+      };
+
+      setSpeakingKey(key);
+      try {
+        await audio.play();
+      } catch (error) {
+        setSpeakingKey(null);
+        if (error instanceof DOMException && error.name === "NotAllowedError") {
+          setHint("浏览器拦住了自动播放，请再点一次朗读按钮。");
+          return;
+        }
+        setHint("这段朗读音频没有成功播放。刚刚我已经把长音频播放方式改稳了，你刷新后再试一次。");
+      }
+    },
+    [],
+  );
 
   const handleChannelSessionId = useCallback((id: string) => {
     setSessionId(id);
@@ -850,7 +982,43 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
     resetJourney();
   }, []);
 
-  const { connectionState, send, sendMessage, sendReviewWord } = useCapybaraChannel({
+  const handleChannelSpeech = useCallback(
+    (payload: SpeechFramePayload) => {
+      const request = speechRequestsRef.current.get(payload.requestId);
+      speechRequestsRef.current.delete(payload.requestId);
+      const key = request?.key ?? payload.cacheKey;
+
+      try {
+        const previousSrc = speechSrcCacheRef.current.get(key);
+        revokeAudioSourceUrl(previousSrc);
+        const src = createAudioSourceUrl(payload.mimeType, payload.audioBase64);
+        speechSrcCacheRef.current.set(key, src);
+        setSpeechLoadingKey((current) => (current === key ? null : current));
+        setHint(null);
+        void playSpeechDataUrl(key, src);
+      } catch (error) {
+        setSpeechLoadingKey((current) => (current === key ? null : current));
+        setSpeakingKey((current) => (current === key ? null : current));
+        setHint(
+          error instanceof Error
+            ? `朗读音频解码失败：${error.message}`
+            : "朗读音频解码失败，请重试。",
+        );
+      }
+    },
+    [playSpeechDataUrl],
+  );
+
+  const handleChannelSpeechError = useCallback((requestId: string, message: string) => {
+    const request = speechRequestsRef.current.get(requestId);
+    speechRequestsRef.current.delete(requestId);
+    if (request) {
+      setSpeechLoadingKey((current) => (current === request.key ? null : current));
+    }
+    setHint(`朗读暂时不可用：${message}`);
+  }, []);
+
+  const { connectionState, send, sendMessage, sendReviewWord, requestSpeech } = useCapybaraChannel({
     enabled: !mockOptions.forceMock,
     url: WS_URL,
     age: settings.age,
@@ -859,6 +1027,8 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
     onSessionId: handleChannelSessionId,
     onSnapshot: handleChannelSnapshot,
     onDelta: handleChannelDelta,
+    onSpeech: handleChannelSpeech,
+    onSpeechError: handleChannelSpeechError,
     onStatus: handleChannelStatus,
     onError: handleChannelError,
   });
@@ -978,6 +1148,23 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
       }),
     [activeDelivery?.id, currentStory, displaySession?.wordBank],
   );
+  const activeWordCard = currentWordCards[activeWordIndex] ?? null;
+  const activeWordSpeechKey = activeWordCard ? `word:${activeWordCard.id}` : null;
+  const activeLetterSpeechKey = currentStory
+    ? `letter:${activeDelivery?.id ?? currentStory.sessionId}:${currentStory.title}`
+    : null;
+  const activeWordSpeechState: "idle" | "loading" | "playing" =
+    activeWordSpeechKey && speakingKey === activeWordSpeechKey
+      ? "playing"
+      : activeWordSpeechKey && speechLoadingKey === activeWordSpeechKey
+        ? "loading"
+        : "idle";
+  const activeLetterSpeechState: "idle" | "loading" | "playing" =
+    activeLetterSpeechKey && speakingKey === activeLetterSpeechKey
+      ? "playing"
+      : activeLetterSpeechKey && speechLoadingKey === activeLetterSpeechKey
+        ? "loading"
+        : "idle";
 
   const allWordCards = displaySession?.wordBank ?? [];
   const historySections = useMemo(
@@ -998,6 +1185,81 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
   useEffect(() => {
     setActiveWordIndex(0);
   }, [activeDelivery?.id, currentStory?.sessionId, currentStory?.title]);
+
+  useEffect(() => {
+    stopSpeechPlayback();
+    setSpeechLoadingKey(null);
+  }, [activeDelivery?.id, currentStory?.sessionId, currentStory?.title, stopSpeechPlayback]);
+
+  const startSpeechRequest = useCallback(
+    (params: PendingSpeechRequest & { text: string }) => {
+      const text = params.text.trim();
+      if (!text) {
+        return;
+      }
+
+      if (mockOptions.forceMock) {
+        setHint("当前是 Mock 时间线模式。切回真实模式并连接卡皮巴拉频道后，才可以真正朗读。");
+        return;
+      }
+
+      if (speakingKey === params.key) {
+        stopSpeechPlayback();
+        return;
+      }
+
+      if (speakingKey && speakingKey !== params.key) {
+        stopSpeechPlayback();
+      }
+
+      const cachedSrc = speechSrcCacheRef.current.get(params.key);
+      if (cachedSrc) {
+        setSpeechLoadingKey(null);
+        setHint(null);
+        void playSpeechDataUrl(params.key, cachedSrc);
+        return;
+      }
+
+      const requestId = requestSpeech(params.scope, text);
+      if (!requestId) {
+        setHint("还没有连上卡皮巴拉频道，暂时不能朗读。");
+        return;
+      }
+
+      speechRequestsRef.current.set(requestId, {
+        key: params.key,
+        scope: params.scope,
+      });
+      setSpeechLoadingKey(params.key);
+      setHint("卡皮巴拉正在准备朗读...");
+    },
+    [mockOptions.forceMock, playSpeechDataUrl, requestSpeech, speakingKey, stopSpeechPlayback],
+  );
+
+  const handleSpeakLetter = useCallback(() => {
+    if (!currentStory || !activeLetterSpeechKey) {
+      return;
+    }
+    startSpeechRequest({
+      key: activeLetterSpeechKey,
+      scope: "letter",
+      text: buildLetterSpeechText(currentStory),
+    });
+  }, [activeLetterSpeechKey, currentStory, startSpeechRequest]);
+
+  const handleSpeakWord = useCallback(
+    (card: StoryWordCard | null) => {
+      if (!card) {
+        return;
+      }
+      startSpeechRequest({
+        key: `word:${card.id}`,
+        scope: "word",
+        text: buildWordSpeechText(card),
+      });
+    },
+    [startSpeechRequest],
+  );
 
   const updateJourney = (
     requestId: string,
@@ -1270,8 +1532,24 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
   const capybaraBubble = letterOpen ? (
     <div className="flex max-h-[min(60vh,33rem)] flex-col rounded-[1.9rem] border-4 border-stone-900 bg-[#fffdf6]/96 p-4 shadow-[8px_8px_0_0_#2b2118] backdrop-blur-md sm:p-5">
       <header className="mb-3 flex items-center justify-between gap-3">
-        <div className="inline-flex rounded-full border-[3px] border-stone-900 bg-[#ffefbf] px-3 py-1 text-xs font-black text-stone-700 shadow-[2px_2px_0_0_#2b2118]">
-          {currentStory?.title ?? "卡皮巴拉正在准备今天的来信"}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-full border-[3px] border-stone-900 bg-[#ffefbf] px-3 py-1 text-xs font-black text-stone-700 shadow-[2px_2px_0_0_#2b2118]">
+            {currentStory?.title ?? "卡皮巴拉正在准备今天的来信"}
+          </div>
+          {currentStory ? (
+            <button
+              type="button"
+              onClick={handleSpeakLetter}
+              className="inline-flex items-center gap-2 rounded-full border-4 border-stone-900 bg-[#fff8e8] px-3 py-2 text-xs font-black text-stone-800 shadow-[3px_3px_0_0_#2b2118]"
+            >
+              <SpeakerIcon />
+              {activeLetterSpeechState === "loading"
+                ? "朗读中..."
+                : activeLetterSpeechState === "playing"
+                  ? "停止朗读"
+                  : "朗读信件"}
+            </button>
+          ) : null}
         </div>
         <button
           aria-label="收起信件"
@@ -1292,10 +1570,11 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
               paragraphs={currentStory.letter.body}
               vocabularyCards={currentStory.vocabularyCards as VocabularyCard[] | undefined}
               onWordTap={(word) => {
-                const idx = currentWordCards.findIndex(
-                  (c) => c.word.toLowerCase() === word.toLowerCase(),
-                );
-                if (idx >= 0) setActiveWordIndex(idx);
+                const idx = currentWordCards.findIndex((c) => c.word.toLowerCase() === word.toLowerCase());
+                if (idx >= 0) {
+                  setActiveWordIndex(idx);
+                  handleSpeakWord(currentWordCards[idx] ?? null);
+                }
               }}
             />
             <div className="mt-4 text-base font-semibold text-stone-800">
@@ -1447,7 +1726,9 @@ export function StoryHomePage({ initialView = "home" }: StoryHomePageProps) {
           activeIndex={activeWordIndex}
           cards={currentWordCards}
           onReview={handleReviewWord}
+          onSpeakWord={() => handleSpeakWord(activeWordCard)}
           reviewing={reviewingWord}
+          speechState={activeWordSpeechState}
           totalBankCount={displaySession?.wordBank.length ?? 0}
         />
       ) : null}

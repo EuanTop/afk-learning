@@ -1,7 +1,9 @@
 import { WebSocketServer, type WebSocket } from "ws";
+import { keepHttpServerTaskAlive } from "openclaw/plugin-sdk/channel-lifecycle";
 import { handleCapybaraLetterInbound } from "./inbound.js";
 import type { ChannelGatewayContext } from "./runtime-api.js";
 import { parseAgeYears } from "./shared/types.js";
+import { synthesizeSpeech } from "./tts/xfyun.js";
 import { CapybaraLetterSessionStore } from "./tools/session-store.js";
 import type { ClientFrame, CoreConfig, ResolvedCapybaraLetterAccount, ServerFrame } from "./types.js";
 import { buildBootstrapWelcomeStory } from "./welcome-story.js";
@@ -61,6 +63,43 @@ function bootstrapSnapshotScore(snapshot: NonNullable<Awaited<ReturnType<Capybar
   return score;
 }
 
+function formatGatewayError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+async function waitForServerListening(wss: WebSocketServer): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const onListening = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const cleanup = () => {
+      wss.off("listening", onListening);
+      wss.off("error", onError);
+    };
+
+    wss.once("listening", onListening);
+    wss.once("error", onError);
+  });
+}
+
+async function closeWebSocketServer(wss: WebSocketServer): Promise<void> {
+  await new Promise<void>((resolve) => {
+    try {
+      wss.close(() => resolve());
+    } catch {
+      resolve();
+    }
+  });
+}
+
 async function resolveBootstrapSnapshot(params: {
   requestedSessionId?: string;
   store: CapybaraLetterSessionStore;
@@ -106,7 +145,24 @@ export async function startCapybaraLetterGatewayAccount(
   const sessionsRoot = `${process.env.HOME ?? process.env.USERPROFILE ?? "/tmp"}/.openclaw/capybara-letter/sessions`;
   const store = new CapybaraLetterSessionStore(sessionsRoot);
 
+  ctx.log?.info?.(
+    `[${account.accountId}] starting capybara-letter gateway account on ws://${host}:${port}`,
+  );
   const wss = new WebSocketServer({ port, host });
+  wss.on("error", (error) => {
+    ctx.log?.error?.(
+      `[${account.accountId}] capybara-letter websocket server error: ${formatGatewayError(error)}`,
+    );
+  });
+
+  try {
+    await waitForServerListening(wss);
+  } catch (error) {
+    await closeWebSocketServer(wss);
+    throw new Error(
+      `[${account.accountId}] failed to listen on ws://${host}:${port}: ${formatGatewayError(error)}`,
+    );
+  }
 
   ctx.setStatus({
     accountId: account.accountId,
@@ -115,6 +171,9 @@ export async function startCapybaraLetterGatewayAccount(
     enabled: account.enabled,
     port,
   });
+  ctx.log?.info?.(
+    `[${account.accountId}] capybara-letter gateway account listening on ws://${host}:${port}`,
+  );
 
   wss.on("connection", (ws) => {
     let clientSessionId: string | null = null;
@@ -201,6 +260,38 @@ export async function startCapybaraLetterGatewayAccount(
           ws.send(JSON.stringify({ type: "status", state: "idle" } satisfies ServerFrame));
         }
 
+        if (frame.type === "request-speech") {
+          try {
+            const speech = await synthesizeSpeech({
+              text: frame.text,
+              scope: frame.scope,
+            });
+            ws.send(
+              JSON.stringify({
+                type: "speech",
+                payload: {
+                  requestId: frame.requestId,
+                  scope: frame.scope,
+                  text: frame.text,
+                  mimeType: speech.mimeType,
+                  audioBase64: speech.audioBase64,
+                  provider: speech.provider,
+                  voice: speech.voice,
+                  cacheKey: speech.cacheKey,
+                },
+              } satisfies ServerFrame),
+            );
+          } catch (error) {
+            ws.send(
+              JSON.stringify({
+                type: "speech-error",
+                requestId: frame.requestId,
+                message: error instanceof Error ? error.message : "TTS request failed",
+              } satisfies ServerFrame),
+            );
+          }
+        }
+
         if (frame.type === "update-profile") {
           const snapshot = await store.updateLearnerProfile({
             sessionId: clientSessionId,
@@ -253,13 +344,14 @@ export async function startCapybaraLetterGatewayAccount(
     });
   });
 
-  ctx.abortSignal.addEventListener("abort", () => {
-    wss.close();
-    activeClients.clear();
-  });
-
-  await new Promise<void>((resolve) => {
-    ctx.abortSignal.addEventListener("abort", () => resolve());
+  await keepHttpServerTaskAlive({
+    server: wss,
+    abortSignal: ctx.abortSignal,
+    onAbort: async () => {
+      ctx.log?.info?.(`[${account.accountId}] stopping capybara-letter gateway account`);
+      activeClients.clear();
+      await closeWebSocketServer(wss);
+    },
   });
 
   ctx.setStatus({
