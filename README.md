@@ -1,52 +1,101 @@
-# 卡皮巴拉的来信 (Capybara's Letter)
+# AFK Learning：卡皮巴拉的来信 (Capybara's Letter)
+![alt text](banner.jpg)
 
-孩子今晚许愿，卡皮巴拉夜里搜集线索，第二天送信回来——附带可展开来信、场景展示和英文词卡。
+一个面向 6+ 用户、全年龄可参与的学习陪伴产品原型。
+用户今天提出想知道的问题，卡皮巴拉夜里去“收集线索”，第二天早晨寄回一封小信。信里不只是答案，还会带着英文词卡、可点击发音、简单复习和场景化呈现，把“学习”做成一种被期待的日常体验。
 
-面向 3-8 岁儿童的双语教育产品，运行在 [OpenClaw](https://github.com/openclaw/openclaw) 之上。
+当前这个 MVP 的视觉和交互依然保留了低龄友好的表达方式，但产品定位已经调整为 6+、全年龄可参与，后续会逐步扩展到更广的人群与更丰富的学习主题。
 
-## 架构
+这个仓库是项目的第一个可运行 MVP：核心的产品闭环已经打通，前端、OpenClaw Agent、会话存储、词卡复习、TTS 朗读都能真实跑起来。
 
-```
+## MVP 状态
+
+当前阶段已经完成：
+
+- 用户通过网页输入今天想探索的话题
+- `capybara` Agent 通过 OpenClaw 处理消息
+- Agent 调用研究与编排工具，生成结构化教学包
+- 前端渲染像素风场景、来信、历史会话、词卡面板
+- 词卡支持 FSRS 间隔复习
+- 信件朗读、单词点读支持讯飞 TTS
+- 会话 snapshot 与 OpenClaw 会话链路已经打通
+
+当前阶段还没有完成：
+
+- 更完整的用户配置端与家长端产品化能力
+- 更强的长期推荐策略与主动送信排程
+- 更丰富的游戏化世界与角色成长系统
+- App / 桌面端打包分发
+
+## 产品体验
+
+产品的核心体验不是“聊天问答”，而是“延迟满足 + 第二天收到回信”：
+
+1. 用户今天说出一个愿望或问题。
+2. 卡皮巴拉接过这个话题，去研究、搜集、整理。
+3. 第二天送来一封可展开的信。
+4. 信里夹带少量可学、可点、可复习的英语内容。
+5. 用户读完后，再决定明天想知道什么。
+
+这让 Agent 更像一个持续陪伴的角色，而不是一次性的工具。
+
+## 当前亮点
+
+- 不是纯 prompt demo，而是完整的产品链路 MVP
+- OpenClaw 负责 Agent 与工具编排，前端单独演进
+- 角色、前端、会话、词卡、TTS 都围绕同一个产品主题收敛
+- 保持“尽量不破坏 OpenClaw upstream”的插件式架构
+
+## 技术结构
+
+```text
 capybara-letter/
 ├── plugin/      OpenClaw channel plugin（WebSocket gateway + agent tools）
-├── frontend/    React + Tailwind 前端入口
-└── shared/      共享类型和 Zod schemas
+├── frontend/    React + Tailwind Web 前端
+└── shared/      共享类型、schema 与数据契约
 ```
 
-`@capybara-letter/plugin` 是这个产品唯一的插件真源。
+`@capybara-letter/plugin` 是当前产品唯一的插件真源。
 
-- 不再把产品源码并入 OpenClaw 仓库
-- 不再依赖 `extensions/capybara-letter/` 副本作为源码真源
-- OpenClaw 自己的 Feishu 或其他 channels 可以继续存在，但不属于本产品链路
-- 本产品只关心 `capybara` agent + `capybara-letter` channel + 独立前端
+- 不再把产品源码直接并入 OpenClaw 仓库
+- 不再依赖 `extensions/capybara-letter/` 一类副本作为真实源码
+- OpenClaw 本体可以继续承载 Feishu 等其他 channel，但不属于本产品链路
+- 本产品只关心 `capybara` Agent、`capybara-letter` channel 和独立前端
 
-```
+### 系统链路
+
+```text
 ┌─────────────────────────────────────────────┐
-│  OpenClaw Gateway                           │
+│                OpenClaw Gateway             │
 │                                             │
-│  Capybara Agent          capybara-letter Channel  │
-│  ┌──────────────┐       ┌────────────────┐  │
-│  │ SOUL.md      │◄──────│ WS gateway     │  │
-│  │ AGENTS.md    │       │ inbound/outbound│  │
-│  │ HEARTBEAT.md │       │ tools:          │  │
-│  │ MEMORY.md    │       │  wikipedia      │  │
-│  └──────────────┘       │  compose_lesson │  │
-│                         │  get_session    │  │
-│                         └───────┬────────┘  │
-└─────────────────────────────────┼───────────┘
-                                  │ WebSocket :18820
-                           ┌──────┴──────┐
-                           │  Frontend   │
-                           │  React +    │
-                           │  Web Frontend│
-                           └─────────────┘
+│  Capybara Agent        capybara-letter      │
+│  ┌──────────────┐      Channel Plugin       │
+│  │ SOUL.md      │◄────►┌─────────────────┐  │
+│  │ AGENTS.md    │      │ WS gateway      │  │
+│  │ HEARTBEAT.md │      │ inbound/outbound│  │
+│  │ MEMORY.md    │      │ session store   │  │
+│  └──────────────┘      │ tools           │  │
+│                        │ - wikipedia     │  │
+│                        │ - weather       │  │
+│                        │ - compose       │  │
+│                        │ - review        │  │
+│                        └───────┬─────────┘  │
+└────────────────────────────────┼────────────┘
+                                 │ ws://127.0.0.1:18820
+                          ┌──────┴──────┐
+                          │  Frontend   │
+                          │ React + Web │
+                          └─────────────┘
 ```
 
-## 前置条件
+## 技术栈
 
-- Node 22+
-- pnpm 9+
-- 已安装可运行的 OpenClaw CLI / Gateway
+- Agent Runtime: [OpenClaw](https://github.com/openclaw/openclaw)
+- Frontend: React + Tailwind CSS + Phaser/像素场景渲染
+- Plugin Runtime: TypeScript + WebSocket
+- Session / Memory Layer: OpenClaw 会话链路 + 产品侧结构化 snapshot
+- Spaced Repetition: `ts-fsrs`
+- TTS: 讯飞在线语音合成
 
 ## 快速开始
 
@@ -77,7 +126,7 @@ pnpm openclaw:install
 openclaw plugins install -l ./plugin
 ```
 
-`--link` 更适合高级开发调试；默认的托管安装更稳。
+`--link` 更适合高级调试；默认的托管安装更稳。
 
 ### 3. 注入 Agent 配置
 
@@ -107,37 +156,51 @@ openclaw config set agents.list "$(openclaw config get agents.list | \
 openclaw config set channels.capybara-letter '{"enabled":true,"port":18820,"host":"127.0.0.1","agentId":"capybara"}'
 ```
 
-### 5. 验证
+### 5. 验证安装状态
 
 ```bash
 openclaw plugins list
-# 应看到: capybara-letter 已安装/已加载
-
 openclaw agents list
-# 应看到: capybara (Capybara's Letter) — Identity: 📨 卡皮巴拉
-
 openclaw channels status
-# 应看到: capybara-letter channel configured
 ```
+
+你应该能看到：
+
+- `capybara-letter` 已安装
+- `capybara` Agent 已注册
+- `capybara-letter` channel 已配置
 
 ### 6. 启动
 
-终端 1 — Gateway：
+终端 1，启动 OpenClaw Gateway：
+
 ```bash
 openclaw gateway run --bind loopback --port 18789
 ```
 
-终端 2 — 前端（在本仓库目录下）：
+如果你本机没有全局 `openclaw` 命令，也可以在 OpenClaw 仓库中这样启动：
+
+```bash
+cd /path/to/openclaw
+node openclaw.mjs gateway run --bind loopback --port 18789
+```
+
+终端 2，启动前端：
+
 ```bash
 cd capybara-letter
 pnpm dev:frontend
 ```
 
-打开 http://localhost:5173，输入一个愿望，等待卡皮巴拉回信。
+打开：
 
-### 6.1 配置讯飞 TTS（可选但推荐）
+```text
+http://localhost:5173
+```
 
-TTS 只接在 `@capybara-letter/plugin` 后端，不放到 OpenClaw core，也不把密钥暴露给浏览器。
+## 配置讯飞 TTS
+
+TTS 只接在 `@capybara-letter/plugin` 后端，不进入 OpenClaw core，也不会把密钥暴露给浏览器。
 
 第一次配置时：
 
@@ -146,7 +209,7 @@ cd capybara-letter
 cp .env.example .env
 ```
 
-然后编辑 `.env`，填入真实讯飞密钥：
+然后编辑 `.env`：
 
 ```dotenv
 CAPYBARA_TTS_XFYUN_APP_ID=你的_APP_ID
@@ -154,7 +217,7 @@ CAPYBARA_TTS_XFYUN_API_KEY=你的_API_KEY
 CAPYBARA_TTS_XFYUN_API_SECRET=你的_API_SECRET
 ```
 
-可选调节项：
+默认音色已经设置为讯飞乐乐：
 
 ```dotenv
 CAPYBARA_TTS_XFYUN_VCN=x_lele
@@ -163,22 +226,24 @@ CAPYBARA_TTS_XFYUN_VOLUME=65
 CAPYBARA_TTS_XFYUN_PITCH=50
 ```
 
-`@capybara-letter/plugin` 会自动按顺序读取：
+插件会自动读取：
 
 1. `capybara-letter/.env`
 2. `capybara-letter/.env.local`
 3. `capybara-letter/plugin/.env`
 4. `capybara-letter/plugin/.env.local`
 
-配完后重新启动 Gateway。前端就会自动支持：
+配置完成后，重启 Gateway 即可生效。
 
-- 展开信件后的“朗读信件”
-- 词卡区域的“点读”
-- 点击信件正文中高亮英文词时直接点读
+当前支持：
 
-如果没有配置讯飞密钥，前端会收到明确错误提示，而不会使用 fake audio。
+- 展开信件后的整封信朗读
+- 词卡区域点读
+- 点击信件正文中的高亮英文词直接点读
 
-### 7. 导入 Mock 会话到 OpenClaw + Snapshot
+## 导入 Mock 会话
+
+如果你想快速演示一条完整会话，可以导入仓库里的 mock 数据：
 
 ```bash
 pnpm seed:mock-session -- --session-id capybara-demo
@@ -186,56 +251,57 @@ pnpm seed:mock-session -- --session-id capybara-demo
 
 可选参数：
 
-- `--mock-at <ISO时间>`: 指定时间切片构建 snapshot
-- `--account-id <id>`: 指定写入哪个 channel account 的 OpenClaw route metadata
+- `--mock-at <ISO时间>`：指定时间切片构建 snapshot
+- `--account-id <id>`：指定写入哪个 channel account 的 OpenClaw route metadata
 
-导入后，前端可通过 `sessionId` 直连同一条会话：
+导入后，可直接通过带 `sessionId` 的地址查看：
 
 ```text
 http://localhost:5173/?sessionId=capybara-demo
 ```
 
-## 产品流程
-
-1. 孩子输入愿望（"我想知道恐龙为什么灭绝"）
-2. `capybara` agent 读取长期记忆、学习词库和上下文环境
-3. Agent 调用 `wikipedia_research`、`get_weather` 等工具搜集资料
-4. Agent 调用 `compose_lesson` 生成结构化教学包：信件 + 场景 + 英文词卡
-5. Channel 通过 WebSocket 推送 JSON payload 给前端
-6. 前端渲染来信、场景状态、可点击词卡和交互流程
-7. HeartBeat 每天早晨自动送信（如果有昨晚的愿望）
-
 ## Agent Tools
 
 | Tool | 用途 |
 |------|------|
-| `wikipedia_research` | 搜索维基百科，返回 ResearchDigest |
+| `wikipedia_research` | 搜索维基百科，返回 `ResearchDigest` |
 | `get_weather` | 获取环境天气，辅助信件情境编排 |
-| `compose_lesson` | 生成结构化教学包并回写 session |
-| `review_word_fsrs` | FSRS 间隔重复，处理词卡复习评分 |
+| `compose_lesson` | 生成结构化教学包并写回 session |
+| `review_word_fsrs` | 处理词卡复习评分与下次复习时间 |
 | `get_learner_session` | 获取学习者当前 session snapshot |
 
-## 开发
+## 开发说明
+
+### 常用命令
 
 ```bash
-# 前端
+# 启动前端
 pnpm dev:frontend
 
 # 类型检查
 pnpm check
+
+# 导入 mock 数据
+pnpm seed:mock-session -- --session-id capybara-demo
 ```
 
-### 开发时的重启规则
+### 热更新与重启规则
 
-- 改 `frontend/`：重新跑前端 dev server 或等待 Vite 热更新。
-- 改 `plugin/`：需要重启 OpenClaw Gateway，`18820` 才会加载到最新的 channel 逻辑。
-
-如果你已经用 link 方式安装了插件，通常不需要重新安装插件，只需要重启 Gateway。
+- 改 `frontend/`：Vite 会热更新，必要时手动刷新页面。
+- 改 `plugin/`：需要重启 OpenClaw Gateway，`18820` 才会加载最新逻辑。
+- 如果你使用的是 `openclaw plugins install -l ./plugin`，通常不需要重复安装插件，只需要重启 Gateway。
 
 ## 与 OpenClaw 的关系
 
-本仓库是独立产品代码。`plugin/` 目录是一个标准的 OpenClaw channel plugin，通过 `openclaw/plugin-sdk/*` 与 OpenClaw 交互。
+本仓库是独立产品代码，不是 OpenClaw upstream 的内置功能分支。
 
-开发期间，推荐使用 `openclaw plugins install ./plugin` 让 OpenClaw 自己托管插件安装，而不是复制一份源码到 OpenClaw 仓库里。
+`plugin/` 目录是一个标准的 OpenClaw channel plugin，通过 `openclaw/plugin-sdk/*` 与 OpenClaw 交互。这样做的目的，是让产品能够：
 
-生产部署时，plugin 将发布到 npm，用户通过 `openclaw plugins install @capybara-letter/plugin` 安装。
+- 尽量减少对 OpenClaw 源码的破坏性修改
+- 更方便持续同步 OpenClaw upstream
+- 保持“产品前端 / 产品逻辑 / OpenClaw 核心”之间的边界清晰
+
+未来如果进入更完整的分发形态，这个产品可以继续沿着两条路线演进：
+
+- 独立开源插件 + 独立前端
+- 与 OpenClaw 一起打包成完整应用
