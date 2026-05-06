@@ -321,4 +321,4 @@ pnpm seed:mock-session -- --session-id capybara-demo
 
 如果你希望将它用于商业用途，必须先获得 `@EuanTop` 的单独书面授权。
 
-请以 [LICENSE](/Users/euan/Downloads/Project_2603/capybara-letter/LICENSE) 中的正式条款为准。README 这一节只是便于理解的摘要，不替代正式许可文本。
+请以 [LICENSE](./LICENSE) 中的正式条款为准。README 这一节只是便于理解的摘要，不替代正式许可文本。
