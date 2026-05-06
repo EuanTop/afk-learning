@@ -305,3 +305,20 @@ pnpm seed:mock-session -- --session-id capybara-demo
 
 - 独立开源插件 + 独立前端
 - 与 OpenClaw 一起打包成完整应用
+
+## License
+
+本项目当前采用 `PolyForm Noncommercial 1.0.0`。
+
+它属于 source-available / non-commercial 许可方案，不属于 OSI 定义下的 open source。
+
+这意味着：
+
+- 你可以阅读、学习、修改这份代码
+- 你可以在非商用前提下分发原版或修改版
+- 你必须保留对 `@EuanTop` 的署名
+- 你不能将本项目或其修改版用于商业用途
+
+如果你希望将它用于商业用途，必须先获得 `@EuanTop` 的单独书面授权。
+
+请以 [LICENSE](/Users/euan/Downloads/Project_2603/capybara-letter/LICENSE) 中的正式条款为准。README 这一节只是便于理解的摘要，不替代正式许可文本。
