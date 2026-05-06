@@ -12,3 +12,5 @@ plugin/agent/USER.md
 plugin/agent/auth-profiles.json
 plugin/agent/auth-state.json
 plugin/agent/models.json
+
+hidden
